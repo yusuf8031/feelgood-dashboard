@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feel Good Chiropractic — Practice Command Center</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#1a1f36; --navy2:#f5f5ff; --ink:#1a1f36; --slate:#6b7280;
+    --line:#e9ebee; --bg:#f6f8fa; --card:#ffffff; --gold:#635bff; --gold-soft:#eeedfd;
+    --green:#1a8245; --green-soft:#e6f6ec; --amber:#a16207; --amber-soft:#fbf1de;
+    --red:#c0392b; --red-soft:#fcecea; --blue:#2f6fb0; --blue-soft:#eaf1fb;
+    --shadow:0 1px 1px rgba(16,24,40,.03),0 2px 5px rgba(16,24,40,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  /* layout */
+  .app{display:flex;min-height:100vh}
+  .sidebar{width:248px;background:var(--card);color:var(--slate);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:20}
+  .brand{padding:22px 22px 18px;border-bottom:1px solid var(--line)}
+  .brand h1{font-size:15px;letter-spacing:-.2px;color:var(--ink);font-weight:600}
+  .brand .mark{display:inline-block;width:30px;height:30px;border-radius:8px;
+    background:var(--gold);margin-bottom:10px;position:relative}
+  .brand .mark:after{content:"F";position:absolute;inset:0;display:flex;align-items:center;
+    justify-content:center;color:#fff;font-weight:700;font-size:16px}
+  .brand small{display:block;color:var(--slate);font-size:11px;margin-top:3px;letter-spacing:.5px;text-transform:uppercase}
+  nav{padding:14px 12px;flex:1}
+  nav .sec{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#9aa1ad;margin:14px 12px 6px}
+  nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:8px;color:var(--slate);
+    cursor:pointer;font-weight:500;font-size:13.5px;margin-bottom:2px;transition:.15s}
+  nav a:hover{background:#f6f7f9;color:var(--ink)}
+  nav a.active{background:var(--gold-soft);color:var(--gold);font-weight:600}
+  nav a .ic{width:18px;text-align:center;opacity:.9}
+  nav a .badge{margin-left:auto;background:#eef0f3;color:var(--slate);border-radius:20px;
+    padding:1px 8px;font-size:11px;font-weight:600}
+  .sb-foot{padding:14px 18px;border-top:1px solid var(--line);font-size:11px;color:#9aa1ad}
+  .sb-foot .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:6px}
+  .main{margin-left:248px;flex:1;min-width:0}
+  /* topbar */
+  .topbar{background:var(--card);border-bottom:1px solid var(--line);padding:16px 28px;
+    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+  .topbar h2{font-size:18px;font-weight:700;color:var(--navy)}
+  .topbar .sub{color:var(--slate);font-size:12.5px;margin-top:2px}
+  .topbar .right{display:flex;align-items:center;gap:18px}
+  .topbar .right .when{text-align:right;font-size:12px;color:var(--slate)}
+  .topbar .right .when b{display:block;color:var(--ink);font-size:13px}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--gold-soft);color:var(--gold);
+    display:flex;align-items:center;justify-content:center;font-weight:600;border:1px solid #e0defa}
+  .content{padding:24px 28px 60px}
+  /* generic */
+  .grid{display:grid;gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  .card .hd{padding:16px 18px 0;display:flex;align-items:center;justify-content:space-between}
+  .card .hd h3{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--slate);font-weight:700}
+  .card .bd{padding:16px 18px}
+  /* kpi */
+  .kpis{grid-template-columns:repeat(4,1fr)}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--gold)}
+  .kpi.green:before{background:var(--green)} .kpi.blue:before{background:var(--blue)} .kpi.red:before{background:var(--red)}
+  .kpi .lab{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--slate);font-weight:600}
+  .kpi .val{font-size:31px;font-weight:600;color:var(--ink);margin:8px 0 2px;letter-spacing:-.7px}
+  .kpi .val small{font-size:15px;color:var(--slate);font-weight:600}
+  .kpi .meta{font-size:12px;color:var(--slate)}
+  .kpi .meta .up{color:var(--green);font-weight:700} .kpi .meta .down{color:var(--red);font-weight:700}
+  .two{grid-template-columns:1.4fr 1fr}
+  .three{grid-template-columns:repeat(3,1fr)}
+  canvas{max-width:100%}
+  /* attention list */
+  .att li{list-style:none;display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .att li:last-child{border-bottom:none}
+  .att .pill{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:3px 8px;border-radius:6px;white-space:nowrap;margin-top:1px}
+  .pill.red{background:var(--red-soft);color:var(--red)} .pill.amber{background:var(--amber-soft);color:var(--amber)}
+  .pill.blue{background:var(--blue-soft);color:var(--blue)} .pill.green{background:var(--green-soft);color:var(--green)}
+  .att .txt{font-size:13px} .att .txt b{color:var(--navy)} .att .txt span{color:var(--slate)}
+  /* tables */
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--slate);
+    font-weight:700;padding:10px 12px;border-bottom:1px solid var(--line);background:#f7f9fc}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);font-size:13px}
+  tbody tr{cursor:default}
+  tbody tr.clk{cursor:pointer} tbody tr.clk:hover{background:#f6f9fd}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
+  .tag.cash{background:var(--green-soft);color:var(--green)}
+  .tag.medpay{background:var(--blue-soft);color:var(--blue)}
+  .tag.lien{background:var(--gold-soft);color:#4b45c6}
+  .tag.insurance{background:#eef0f3;color:#566}
+  .st{font-size:11.5px;font-weight:600}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .age-ok{color:var(--green)} .age-warn{color:var(--amber);font-weight:700} .age-bad{color:var(--red);font-weight:700}
+  /* filters */
+  .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{padding:7px 14px;border:1px solid var(--line);background:var(--card);border-radius:20px;cursor:pointer;
+    font-size:12.5px;font-weight:600;color:var(--slate);transition:.15s}
+  .chip:hover{border-color:#c5d0de}
+  .chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .chip .n{opacity:.7;margin-left:5px}
+  .search{margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);
+    border-radius:9px;padding:8px 12px;min-width:230px}
+  .search input{border:none;outline:none;font-size:13px;flex:1;min-width:0;background:transparent}
+  .search .mic{width:30px;height:30px;font-size:13px}
+  .btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 12px;font-size:12.5px;
+    font-weight:600;color:var(--navy);cursor:pointer}
+  .btn:hover{background:#f4f7fb}
+  .btn.gold{background:var(--gold);border-color:var(--gold);color:#fff}
+  .btn.sm{padding:4px 9px;font-size:11.5px}
+  /* contact list (cash) */
+  .contacts{grid-template-columns:repeat(3,1fr)}
+  .ccard{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:15px;box-shadow:var(--shadow)}
+  .ccard .nm{font-weight:700;color:var(--navy);font-size:14.5px}
+  .ccard .ph{font-size:18px;font-weight:700;color:var(--ink);letter-spacing:.5px;margin:7px 0 3px;font-variant-numeric:tabular-nums}
+  .ccard .row{display:flex;gap:8px;margin-top:10px}
+  .ccard .row .btn{flex:1;text-align:center}
+  /* firm cards */
+  .firmgrid{grid-template-columns:repeat(2,1fr)}
+  .firm{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .firm .top{padding:16px 18px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--line)}
+  .firm .top .nm{font-weight:700;color:var(--navy);font-size:15px}
+  .firm .top .nm small{display:block;color:var(--slate);font-weight:500;font-size:12px;margin-top:2px}
+  .firm .out{text-align:right} .firm .out .big{font-size:22px;font-weight:600;color:var(--ink);letter-spacing:-.4px}
+  .firm .out small{color:var(--slate);font-size:11px}
+  .firm .stats{display:flex;padding:12px 18px;gap:18px;font-size:12px;color:var(--slate)}
+  .firm .stats b{display:block;color:var(--ink);font-size:15px;font-weight:700}
+  .firm .pts{padding:0 18px 14px}
+  .firm .pts .pt{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:12.5px}
+  .firm .pts .pt .a{color:var(--ink)} .firm .pts .pt .a small{color:var(--slate)}
+  /* progress / gauge */
+  .bar{height:9px;border-radius:6px;background:#eef1f6;overflow:hidden;position:relative}
+  .bar > i{display:block;height:100%;border-radius:6px}
+  .gauge-wrap{position:relative}
+  .target-band{position:absolute;top:0;bottom:0;background:rgba(31,138,91,.16);border-left:1px dashed #1f8a5b;border-right:1px dashed #1f8a5b}
+  /* drawer */
+  .drawer-bg{position:fixed;inset:0;background:rgba(15,37,64,.42);display:none;z-index:40}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:560px;max-width:94vw;background:var(--bg);z-index:41;
+    transform:translateX(100%);transition:.28s cubic-bezier(.4,0,.2,1);overflow-y:auto;box-shadow:-12px 0 40px rgba(0,0,0,.2)}
+  .drawer.open{transform:translateX(0)} .drawer-bg.open{display:block}
+  .drawer .dh{background:var(--card);color:var(--ink);padding:20px 24px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--line)}
+  .drawer .dh .x{position:absolute;right:18px;top:18px;cursor:pointer;color:var(--slate);font-size:22px;line-height:1}
+  .drawer .dh h3{font-size:19px;font-weight:600;color:var(--ink)} .drawer .dh .meta{color:var(--slate);font-size:12.5px;margin-top:4px}
+  .drawer .db{padding:20px 24px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .panel h4{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--slate);margin-bottom:12px}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px dashed var(--line)}
+  .kv:last-child{border-bottom:none} .kv .k{color:var(--slate)} .kv .v{font-weight:600;color:var(--ink)}
+  .steps{display:flex;flex-direction:column;gap:0}
+  .step{display:flex;gap:12px;align-items:flex-start;position:relative;padding-bottom:16px}
+  .step:before{content:"";position:absolute;left:8px;top:18px;bottom:-2px;width:2px;background:var(--line)}
+  .step:last-child:before{display:none}
+  .step .nd{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);background:#fff;flex-shrink:0;z-index:1;margin-top:1px}
+  .step.done .nd{background:var(--green);border-color:var(--green)}
+  .step.now .nd{background:var(--gold);border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-soft)}
+  .step .lab{font-size:13px;font-weight:600;color:var(--ink)} .step.todo .lab{color:var(--slate);font-weight:500}
+  .step .dt{font-size:11.5px;color:var(--slate)}
+  .flag{display:flex;gap:9px;align-items:center;padding:10px 12px;border-radius:8px;font-size:12.5px;font-weight:600;margin-top:4px}
+  .flag.ok{background:var(--green-soft);color:var(--green)} .flag.warn{background:var(--amber-soft);color:var(--amber)}
+  .flag.bad{background:var(--red-soft);color:var(--red)}
+  .note{font-size:11.5px;color:var(--slate);font-style:italic;margin-top:8px}
+  .legend{display:flex;gap:14px;font-size:11.5px;color:var(--slate);margin-top:10px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+  .hide{display:none}
+  .mb16{margin-bottom:16px} .mt8{margin-top:8px}
+  /* sync */
+  .sync-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .sync-row .ic2{width:40px;height:40px;border-radius:9px;background:var(--blue-soft);color:var(--blue);
+    display:flex;align-items:center;justify-content:center;font-weight:800}
+  .map{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12.5px}
+  .map .e{background:#f7f9fc;border:1px solid var(--line);border-radius:7px;padding:8px 11px;font-family:ui-monospace,monospace}
+  .map .ar{color:var(--slate);text-align:center}
+  /* intake / voice */
+  .vin{display:flex;gap:6px;align-items:flex-start}
+  .vin input,.vin textarea{flex:1;min-width:0}
+  .mic{width:38px;height:38px;flex:none;border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;font-size:15px;color:var(--slate);display:flex;align-items:center;justify-content:center}
+  .mic:hover{background:#f4f7fb;border-color:var(--gold);color:var(--gold)}
+  .mic.rec{color:#fff;background:var(--red);border-color:var(--red);animation:micpulse 1.1s infinite}
+  @keyframes micpulse{0%{box-shadow:0 0 0 0 rgba(192,57,43,.45)}70%{box-shadow:0 0 0 7px rgba(192,57,43,0)}100%{box-shadow:0 0 0 0 rgba(192,57,43,0)}}
+  .fld{margin-bottom:13px}
+  .fld label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);font-weight:600;margin-bottom:5px}
+  .fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink)}
+  .fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
+  .formgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+  .formgrid .full{grid-column:1/-1}
+  /* google / calendar / mail */
+  .gsign{display:inline-flex;align-items:center;gap:10px;background:#fff;border:1px solid #dadce0;border-radius:8px;padding:11px 18px;font-size:14px;font-weight:600;color:#3c4043;cursor:pointer;box-shadow:var(--shadow)}
+  .gsign:hover{background:#f8f9fa}
+  .gate{text-align:center;padding:46px 20px}
+  .gate .gi{font-size:30px}
+  .connbar{display:flex;align-items:center;gap:8px;background:var(--green-soft);border:1px solid #cdebd9;color:var(--green);border-radius:10px;padding:9px 14px;font-size:12.5px;font-weight:600;margin-bottom:16px}
+  .connbar .who{color:var(--ink);font-weight:500} .connbar .dc{margin-left:auto;cursor:pointer;color:var(--slate);font-weight:600}
+  .cal{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  .calday{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;min-height:210px}
+  .calday .cdh{padding:10px 12px;border-bottom:1px solid var(--line);font-size:12px;font-weight:600;color:var(--ink);background:#fafbfc}
+  .calday.today .cdh{background:var(--gold-soft);color:var(--gold)}
+  .calday .evs{padding:8px}
+  .event{border-radius:8px;padding:7px 9px;margin-bottom:7px;font-size:11.5px;border-left:3px solid var(--blue);background:var(--blue-soft);color:var(--ink)}
+  .event .tm{font-weight:700;font-size:11px}
+  .event.call{border-color:var(--gold);background:var(--gold-soft)} .event.reexam{border-color:var(--red);background:var(--red-soft)} .event.admin{border-color:#9aa7b6;background:#f1f3f6}
+  @media(max-width:1100px){.cal{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}.two,.three,.contacts,.firmgrid{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="loginScreen">
+  <form class="loginCard" id="loginForm">
+    <div class="lm">F</div>
+    <h2>Feel Good Chiropractic</h2>
+    <p>Practice Command Center — sign in</p>
+    <div class="loginErr" id="loginErr"></div>
+    <label>Email</label><input id="li_email" type="email" autocomplete="username" placeholder="you@feelgoodchiro.com">
+    <label>Password</label><input id="li_pass" type="password" autocomplete="current-password" placeholder="Password">
+    <button type="submit">Sign in</button>
+  </form>
+</div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="mark"></span>
+      <h1>Feel Good Chiropractic</h1>
+      <small>Practice Command Center</small>
+    </div>
+    <nav id="nav">
+      <div class="sec">Overview</div>
+      <a data-view="overview" class="active"><span class="ic">▦</span> Executive Dashboard</a>
+      <div class="sec">Workspace</div>
+      <a data-view="schedule"><span class="ic">▥</span> Schedule</a>
+      <div class="sec">Team</div>
+      <a data-view="todos"><span class="ic">✓</span> To-Do</a>
+      <a data-view="users"><span class="ic">❖</span> Users &amp; Access</a>
+      <div class="sec">Patients</div>
+      <a data-view="roster"><span class="ic">☰</span> Patient Roster <span class="badge" id="nb-all"></span></a>
+      <a data-view="cash"><span class="ic">✆</span> Cash — Quick Contact</a>
+      <a data-view="medpay"><span class="ic">⚡</span> Med-Pay Tracker</a>
+      <div class="sec">Liens &amp; Collections</div>
+      <a data-view="liens"><span class="ic">⚖</span> Lien Cases <span class="badge" id="nb-lien"></span></a>
+      <a data-view="ar"><span class="ic">$</span> Attorney A/R</a>
+      <div class="sec">Intake</div>
+      <a data-view="intake"><span class="ic">✎</span> Add Patient — Voice <span class="badge">New</span></a>
+      <div class="sec">System</div>
+      <a data-view="settings"><span class="ic">⚙</span> ECLIPSE Sync</a>
+    </nav>
+    <div class="sb-foot"><span class="dot"></span> Demo data · No PHI<br>Prototype v0.1</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h2 id="vtitle">Executive Dashboard</h2>
+        <div class="sub" id="vsub">Whole-practice view across cash, insurance, med-pay &amp; liens</div>
+      </div>
+      <div class="right">
+        <div class="when"><b>Tuesday, June 16, 2026</b><span id="lastsync"></span></div>
+        <div class="avatar">DR</div>
+      </div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<div class="drawer-bg" id="dbg" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer"></div>
+
+<script>
+/* ---------------- MOCK DATA ---------------- */
+const FIRMS = [
+  {id:'f1', name:'Hartley & Cruz Trial Lawyers', city:'Los Angeles, CA', avgDays:168},
+  {id:'f2', name:'Okafor Injury Group', city:'Long Beach, CA', avgDays:142},
+  {id:'f3', name:'Salazar Law, APC', city:'Santa Ana, CA', avgDays:295},
+  {id:'f4', name:'Bennett & Reyes LLP', city:'Riverside, CA', avgDays:121},
+  {id:'f5', name:'Goldstein Accident Attorneys', city:'Glendale, CA', avgDays:210},
+];
+const FNAMES=['James','Maria','David','Aisha','Robert','Linda','Carlos','Nina','Marcus','Priya','Hector','Janet','Tyrone','Sofia','Wei','Grace','Andre','Lupe','Omar','Renee','Derek','Yara','Paul','Camila','Isaac','Tanya','Victor','Hana','Luis','Brenda','Sam','Diane','Kofi','Rosa','Neil','Tara','Ivan','Mona','Glen','Beatriz'];
+const LNAMES=['Whitfield','Alvarez','Nguyen','Robinson','Carter','Park','Mendez','Olsen','Banks','Shah','Castillo','Pierce','Booker','Romero','Chen','Adeyemi','Flores','Khan','Webb','Sato','Ramos','Coleman','Ortiz','Frost','Diallo','Vance','Nakamura','Greer','Cabrera','Hsu'];
+const DMG=['Minor','Moderate','Severe'];
+const CARRIERS=['Blue Shield','Blue Cross','Aetna','UnitedHealthcare','Kaiser'];
+function rng(seed){let s=seed;return()=>{s=(s*9301+49297)%233280;return s/233280}}
+const R=rng(73);
+function pick(a){return a[Math.floor(R()*a.length)]}
+function phone(){return '('+(200+Math.floor(R()*699))+') '+(200+Math.floor(R()*699))+'-'+(1000+Math.floor(R()*8999))}
+function daysAgo(n){const d=new Date('2026-06-16');d.setDate(d.getDate()-n);return d}
+function fmtD(d){return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+function money(n){return '$'+Math.round(n).toLocaleString()}
+
+const LIFE=['Active Treatment','P&S / MMI Reached','Records Packaged','Sent to Attorney','Outstanding'];
+const PATIENTS=[];
+let id=1;
+function mk(type,n){for(let i=0;i<n;i++){
+  const fn=pick(FNAMES),ln=pick(LNAMES);
+  const p={id:id++,name:fn+' '+ln,phone:phone(),type:type};
+  if(type==='Cash'){p.lastVisit=daysAgo(Math.floor(R()*40));p.billed=40+Math.floor(R()*9)*15;p.visits=1+Math.floor(R()*8);}
+  if(type==='Insurance'){p.carrier=pick(CARRIERS);p.copay=[20,30,40,50][Math.floor(R()*4)];p.visits=2+Math.floor(R()*14);
+    p.billed=p.visits*(95+Math.floor(R()*40));p.lastVisit=daysAgo(Math.floor(R()*25));}
+  if(type==='Med-Pay'){const start=Math.floor(R()*70);p.startDate=daysAgo(start);p.visits=2+Math.floor(R()*16);
+    p.billed=p.visits*(110+Math.floor(R()*60));p.expectedPay=daysAgo(start-14);
+    p.received= start>16 ? p.billed : 0; p.status= p.received>0?'Paid': (start>14?'Follow-up':'Active');
+    p.lastVisit=daysAgo(Math.floor(R()*14));}
+  if(type==='Lien'){
+    const dmg=pick(DMG);const tier=dmg==='Minor'?[3000,7000]:dmg==='Moderate'?[8000,18000]:[18000,42000];
+    const firm=pick(FIRMS);const lifeIdx=Math.floor(R()*5);
+    const visits= 4+Math.floor(R()*26); const perVisit=120+Math.floor(R()*70);
+    const billed=visits*perVisit;
+    const doi=20+Math.floor(R()*520);
+    p.firm=firm.id; p.firmName=firm.name; p.damage=dmg; p.estLow=tier[0]; p.estHigh=tier[1];
+    p.targetLow=Math.round(tier[0]*0.18); p.targetHigh=Math.round(tier[1]*0.32);
+    p.visits=visits; p.billed=billed; p.perVisit=perVisit;
+    p.doi=daysAgo(doi); p.life=LIFE[lifeIdx]; p.lifeIdx=lifeIdx;
+    p.planVisits= dmg==='Minor'?14:dmg==='Moderate'?24:36;
+    p.lastVisit=daysAgo(Math.floor(R()*30));
+    p.reexamDue= (p.visits%6===0)? daysAgo(-2): daysAgo(8+Math.floor(R()*22));
+    if(lifeIdx>=3){ // sent to attorney / outstanding
+      p.sentDate=daysAgo(Math.floor(R()*560)+20);
+      p.daysOpen=Math.round((new Date('2026-06-16')-p.sentDate)/864e5);
+      p.reductionReq= R()<0.32 ? Math.round(billed*(0.25+R()*0.2)) : 0;
+    }
+    // over/under treatment flag
+    if(p.billed>p.targetHigh*1.15) p.pace='over';
+    else if(p.life==='P&S / MMI Reached' && p.billed<p.targetLow*0.85) p.pace='under';
+    else p.pace='ok';
+  }
+  PATIENTS.push(p);
+}}
+mk('Cash',14);mk('Insurance',12);mk('Med-Pay',13);mk('Lien',22);
+
+const byType=t=>PATIENTS.filter(p=>p.type===t);
+const liens=byType('Lien');
+const medpays=byType('Med-Pay');
+const outstanding=liens.filter(p=>p.lifeIdx>=3);
+const totalOut=outstanding.reduce((s,p)=>s+(p.billed-(p.reductionReq||0)),0);
+const medpayActive=medpays.filter(p=>p.status!=='Paid').length;
+const medpayNewMonth=medpays.filter(p=>p.startDate>daysAgo(30)).length;
+const collectedMonth = medpays.filter(p=>p.received>0&&p.startDate>daysAgo(45)).reduce((s,p)=>s+p.received,0)
+   + byType('Cash').reduce((s,p)=>s+p.billed,0);
+
+/* ---------------- VIEWS ---------------- */
+const C=document.getElementById('content');
+let charts=[];
+function clearCharts(){charts.forEach(c=>c.destroy());charts=[];}
+
+const VIEWS={
+ overview(){return `
+  <div class="grid kpis mb16">
+    ${kpi('Active Patients',PATIENTS.length,'across all four payment types','gold','61 total · 22 on lien')}
+    ${kpi('Med-Pay Active',medpayActive,'<span class="up">+'+medpayNewMonth+'</span> new this month · pays in ~14 days','blue')}
+    ${kpi('Open Lien $ Outstanding',money(totalOut),outstanding.length+' cases awaiting settlement','gold')}
+    ${kpi('Collected This Month',money(collectedMonth),'<span class="up">▲ 12%</span> vs. trailing avg · cash + med-pay','green')}
+  </div>
+  <div class="grid two mb16">
+    <div class="card"><div class="hd"><h3>Lien A/R Aging — $ outstanding by age</h3><span class="btn sm" onclick="go('ar')">Open A/R →</span></div>
+      <div class="bd"><canvas id="ch-aging" height="120"></canvas>
+      <div class="legend"><span><i style="background:#1f8a5b"></i>Current (0–90d)</span><span><i style="background:#c4881a"></i>Watch (91–365d)</span><span><i style="background:#c0392b"></i>Stale (365d+)</span></div></div></div>
+    <div class="card"><div class="hd"><h3>Patient Mix</h3></div>
+      <div class="bd"><canvas id="ch-mix" height="120"></canvas></div></div>
+  </div>
+  <div class="grid two">
+    <div class="card"><div class="hd"><h3>Cash + Med-Pay Collections — monthly</h3></div>
+      <div class="bd"><canvas id="ch-trend" height="110"></canvas></div></div>
+    <div class="card"><div class="hd"><h3>Needs Attention Today</h3></div>
+      <div class="bd"><ul class="att">${attentionItems()}</ul></div></div>
+  </div>`;},
+
+ roster(){return rosterHTML('all');},
+ cash(){return cashHTML();},
+ medpay(){return medpayHTML();},
+ liens(){return liensHTML();},
+ ar(){return arHTML();},
+ settings(){return settingsHTML();},
+ intake(){return intakeHTML();},
+ schedule(){return scheduleHTML();}
+};
+
+function kpi(lab,val,meta,cls,extra){return `<div class="kpi ${cls}"><div class="lab">${lab}</div>
+  <div class="val">${val}</div><div class="meta">${meta}</div></div>`;}
+
+function attentionItems(){
+  const items=[];
+  const stale=outstanding.filter(p=>p.daysOpen>365).sort((a,b)=>b.daysOpen-a.daysOpen).slice(0,2);
+  stale.forEach(p=>items.push(['red','Aged Lien',`<b>${p.name}</b> — <span>out ${p.daysOpen} days at ${p.firmName}. Check status / litigation.</span>`,'liens']));
+  const red=outstanding.filter(p=>p.reductionReq>0).slice(0,2);
+  red.forEach(p=>items.push(['amber','Reduction',`<b>${p.name}</b> — <span>firm requested ${money(p.reductionReq)} reduction (billed ${money(p.billed)}).</span>`,'ar']));
+  const reexam=liens.filter(p=>p.life==='Active Treatment'&&p.reexamDue<daysAgo(0)).slice(0,2);
+  reexam.forEach(p=>items.push(['blue','Re-exam Due',`<b>${p.name}</b> — <span>30-day re-exam overdue. Document progress to support the bill.</span>`,'liens']));
+  const ready=liens.filter(p=>p.life==='P&S / MMI Reached').slice(0,2);
+  ready.forEach(p=>items.push(['green','Ready to Package',`<b>${p.name}</b> — <span>P&S/MMI reached. Package records &amp; send to ${p.firmName}.</span>`,'liens']));
+  const fu=medpays.filter(p=>p.status==='Follow-up').slice(0,1);
+  fu.forEach(p=>items.push(['amber','Med-Pay',`<b>${p.name}</b> — <span>past 14-day window, payment not posted. Follow up with carrier.</span>`,'medpay']));
+  return items.slice(0,7).map(i=>`<li><span class="pill ${i[0]}">${i[1]}</span><span class="txt" onclick="go('${i[3]}')" style="cursor:pointer">${i[2]}</span></li>`).join('');
+}
+
+/* ---- roster ---- */
+function rosterHTML(active){
+  const counts={all:PATIENTS.length,Cash:byType('Cash').length,Insurance:byType('Insurance').length,'Med-Pay':medpays.length,Lien:liens.length};
+  const chip=(k,l)=>`<div class="chip ${active===k?'active':''}" onclick="setFilter('${k}')">${l}<span class="n">${counts[k]}</span></div>`;
+  return `<div class="toolbar">
+    <div class="chips">${chip('all','All')}${chip('Cash','Cash')}${chip('Insurance','Insurance')}${chip('Med-Pay','Med-Pay')}${chip('Lien','Lien')}</div>
+    <div class="search">🔎<input id="q" placeholder="Search patient name…" oninput="filterRows()">${micBtn('q')}</div>
+  </div>
+  <div class="card"><div class="bd" style="padding:0">
+  <table id="rtbl"><thead><tr><th>Patient</th><th>Phone</th><th>Type</th><th>Status</th><th>Firm</th><th>Visits</th><th>Billed</th><th>Last Visit</th></tr></thead>
+  <tbody>${rosterRows(active)}</tbody></table></div></div>`;
+}
+function statusOf(p){
+  if(p.type==='Lien')return `<span class="st"><span class="dot" style="background:${p.lifeIdx>=3?'#c4881a':'#2f6fb0'}"></span>${p.life}</span>`;
+  if(p.type==='Med-Pay')return `<span class="st"><span class="dot" style="background:${p.status==='Paid'?'#1f8a5b':p.status==='Follow-up'?'#c0392b':'#2f6fb0'}"></span>${p.status}</span>`;
+  return `<span class="st"><span class="dot" style="background:#1f8a5b"></span>Active</span>`;
+}
+function rosterRows(active){
+  let list=active==='all'?PATIENTS:PATIENTS.filter(p=>p.type===active);
+  return list.map(p=>`<tr class="${p.type==='Lien'?'clk':''}" data-name="${p.name.toLowerCase()}" ${p.type==='Lien'?`onclick="openLien(${p.id})"`:''}>
+    <td><b>${p.name}</b></td><td>${p.phone}</td><td><span class="tag ${p.type.toLowerCase().replace('-','')}">${p.type}</span></td>
+    <td>${statusOf(p)}</td><td>${p.firmName||'<span style="color:#9aa7b6">—</span>'}</td><td>${p.visits||'—'}</td>
+    <td>${money(p.billed||0)}</td><td>${p.lastVisit?fmtD(p.lastVisit):'—'}</td></tr>`).join('');
+}
+let curFilter='all';
+function setFilter(k){curFilter=k;document.querySelector('#rtbl tbody').innerHTML=rosterRows(k);
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  [...document.querySelectorAll('.chip')].find(c=>c.textContent.startsWith(k==='all'?'All':k))?.classList.add('active');}
+function filterRows(){const q=document.getElementById('q').value.toLowerCase();
+  document.querySelectorAll('#rtbl tbody tr').forEach(tr=>tr.style.display=tr.dataset.name.includes(q)?'':'none');}
+
+/* ---- cash quick contact ---- */
+function cashHTML(){
+  const cash=byType('Cash');
+  return `<div class="toolbar"><div class="chips"><div class="chip active">Cash patients <span class="n">${cash.length}</span></div></div>
+    <div class="search">🔎<input id="cq" placeholder="Search…" oninput="cashFilter()">${micBtn('cq')}</div></div>
+    <p style="color:var(--slate);font-size:13px;margin-bottom:16px">One-click contact list — no more digging through files. Name &amp; number for every cash patient.</p>
+    <div class="grid contacts" id="cgrid">${cash.map(p=>`<div class="ccard" data-name="${p.name.toLowerCase()}">
+      <div class="nm">${p.name}</div><div class="ph">${p.phone}</div>
+      <div style="font-size:12px;color:var(--slate)">${p.visits} visits · last ${fmtD(p.lastVisit)}</div>
+      <div class="row"><span class="btn sm gold" onclick="alert('Calling ${p.name}…')">✆ Call</span>
+        <span class="btn sm" onclick="navigator.clipboard&&navigator.clipboard.writeText('${p.phone}');this.textContent='Copied'">Copy #</span></div>
+    </div>`).join('')}</div>`;
+}
+function cashFilter(){const q=document.getElementById('cq').value.toLowerCase();
+  document.querySelectorAll('#cgrid .ccard').forEach(c=>c.style.display=c.dataset.name.includes(q)?'':'none');}
+
+/* ---- med-pay ---- */
+function medpayHTML(){
+  const paid=medpays.filter(p=>p.status==='Paid').length;
+  const fu=medpays.filter(p=>p.status==='Follow-up').length;
+  return `<div class="grid three mb16">
+    ${kpi('Active Med-Pay',medpayActive,'currently in treatment','blue')}
+    ${kpi('New This Month',medpayNewMonth,'started in last 30 days','green')}
+    ${kpi('Awaiting Payment',fu,'past the ~14-day window — follow up','red')}
+  </div>
+  <div class="grid two mb16">
+    <div class="card"><div class="hd"><h3>New Med-Pay Cases — by month</h3></div><div class="bd"><canvas id="ch-mp" height="120"></canvas></div></div>
+    <div class="card"><div class="hd"><h3>Why Med-Pay matters</h3></div><div class="bd">
+      <div class="kv"><span class="k">Typical payment time</span><span class="v">~14 days from start</span></div>
+      <div class="kv"><span class="k">Deductible</span><span class="v">None</span></div>
+      <div class="kv"><span class="k">Pays if patient at fault?</span><span class="v">Yes</span></div>
+      <div class="kv"><span class="k">Paid this cohort</span><span class="v">${paid} of ${medpays.length}</span></div>
+      <p class="note">"The more med-pay we have, the better the office does each month."</p>
+    </div></div>
+  </div>
+  <div class="card"><div class="hd"><h3>Med-Pay Cases</h3></div><div class="bd" style="padding:0">
+  <table><thead><tr><th>Patient</th><th>Started</th><th>Expected Pay</th><th>Visits</th><th>Billed</th><th>Received</th><th>Status</th></tr></thead>
+  <tbody>${medpays.map(p=>`<tr><td><b>${p.name}</b><br><span style="color:var(--slate);font-size:11px">${p.phone}</span></td>
+    <td>${fmtD(p.startDate)}</td><td>${fmtD(p.expectedPay)}</td><td>${p.visits}</td><td>${money(p.billed)}</td>
+    <td>${p.received?money(p.received):'—'}</td><td>${statusOf(p)}</td></tr>`).join('')}</tbody></table>
+  </div></div>`;
+}
+
+/* ---- liens ---- */
+function liensHTML(){
+  return `<p style="color:var(--slate);font-size:13px;margin-bottom:14px">Click any case to open the full lien file — valuation, treatment pacing, lifecycle &amp; financials.</p>
+  <div class="card"><div class="bd" style="padding:0">
+  <table><thead><tr><th>Patient</th><th>Firm</th><th>Damage</th><th>Stage</th><th>Visits</th><th>Billed</th><th>Pace</th><th>Age</th></tr></thead>
+  <tbody>${liens.map(p=>{
+    const paceTag=p.pace==='over'?'<span class="pill red">Over</span>':p.pace==='under'?'<span class="pill amber">Under</span>':'<span class="pill green">On track</span>';
+    const age=p.daysOpen?ageCls(p.daysOpen):'—';
+    return `<tr class="clk" onclick="openLien(${p.id})"><td><b>${p.name}</b></td><td>${p.firmName}</td>
+      <td>${p.damage}</td><td>${statusOf(p)}</td><td>${p.visits}/${p.planVisits}</td><td>${money(p.billed)}</td>
+      <td>${paceTag}</td><td>${age}</td></tr>`;}).join('')}</tbody></table>
+  </div></div>`;
+}
+function ageCls(d){const c=d>365?'age-bad':d>90?'age-warn':'age-ok';return `<span class="${c}">${d}d</span>`;}
+
+/* ---- attorney AR ---- */
+function arHTML(){
+  const totBilled=outstanding.reduce((s,p)=>s+p.billed,0);
+  const totRed=outstanding.reduce((s,p)=>s+(p.reductionReq||0),0);
+  return `<div class="grid three mb16">
+    ${kpi('Total Outstanding',money(totalOut),outstanding.length+' cases across '+FIRMS.length+' firms','gold')}
+    ${kpi('Reduction Requests',money(totRed),outstanding.filter(p=>p.reductionReq>0).length+' cases flagged by firms','red')}
+    ${kpi('Avg Days to Pay',Math.round(FIRMS.reduce((s,f)=>s+f.avgDays,0)/FIRMS.length)+'d','historical, across firms','blue')}
+  </div>
+  <div class="grid firmgrid">${FIRMS.map(f=>{
+    const pts=outstanding.filter(p=>p.firm===f.id).sort((a,b)=>b.daysOpen-a.daysOpen);
+    const out=pts.reduce((s,p)=>s+(p.billed-(p.reductionReq||0)),0);
+    const oldest=pts.length?Math.max(...pts.map(p=>p.daysOpen)):0;
+    return `<div class="firm">
+      <div class="top"><div class="nm">${f.name}<small>${f.city}</small></div>
+        <div class="out"><div class="big">${money(out)}</div><small>outstanding</small></div></div>
+      <div class="stats"><div><b>${pts.length}</b>open cases</div><div><b class="${oldest>365?'age-bad':oldest>90?'age-warn':'age-ok'}">${oldest}d</b>oldest</div><div><b>${f.avgDays}d</b>avg to pay</div></div>
+      <div class="pts">${pts.slice(0,4).map(p=>`<div class="pt"><span class="a" onclick="openLien(${p.id})" style="cursor:pointer">${p.name} <small>· ${p.damage}</small>${p.reductionReq?' <span class="pill amber" style="font-size:9px">reduction</span>':''}</span>
+        <span>${money(p.billed)} · ${ageCls(p.daysOpen)}</span></div>`).join('')||'<div class="pt"><span class="a" style="color:#9aa7b6">No outstanding cases</span></div>'}
+        ${pts.length>4?`<div class="pt"><span class="a" style="color:var(--blue);cursor:pointer">+${pts.length-4} more</span></div>`:''}</div>
+    </div>`;}).join('')}</div>`;
+}
+
+/* ---- settings / sync ---- */
+function settingsHTML(){
+  return `<div class="card mb16"><div class="bd">
+    <div class="sync-row"><div class="ic2">EC</div><div style="flex:1">
+      <b>ECLIPSE® by MPN Software Systems</b><div style="color:var(--slate);font-size:12.5px">Self-hosted (Windows) · system of record</div></div>
+      <span class="pill green">Connected (demo)</span></div>
+    <div class="sync-row"><div style="flex:1"><b>Sync method</b><div style="color:var(--slate);font-size:12.5px">Scheduled CSV export — nightly. Upgrade path: FairCom SQL / ODBC for real-time status.</div></div>
+      <button class="btn">Configure</button></div>
+    <div class="sync-row" style="border-bottom:none"><div style="flex:1"><b>Last sync</b><div style="color:var(--slate);font-size:12.5px">Today, 6:00 AM · 61 patients · 9 ledger updates</div></div>
+      <button class="btn gold">Sync now</button></div>
+  </div></div>
+  <div class="card"><div class="hd"><h3>Field mapping — ECLIPSE → Dashboard</h3></div><div class="bd">
+    <div class="map" style="margin-bottom:10px"><div class="e">PATIENT.Phone</div><div class="ar">→</div><div>Contact phone</div></div>
+    <div class="map" style="margin-bottom:10px"><div class="e">LEDGER.OpenBalance</div><div class="ar">→</div><div>Outstanding balance</div></div>
+    <div class="map" style="margin-bottom:10px"><div class="e">LEDGER.PaymentPosted</div><div class="ar">→</div><div>Resolves Outstanding → Paid</div></div>
+    <div class="map" style="margin-bottom:10px"><div class="e">CASE.AttorneyFirm</div><div class="ar">→</div><div>Firm assignment (A/R board)</div></div>
+    <div class="map"><div class="e">CASE.RecordsSentDate</div><div class="ar">→</div><div>Aging clock start</div></div>
+    <p class="note">When a payment posts in ECLIPSE, the nightly sync flips the case from Outstanding to Paid automatically — replacing the manual paper-drawer process.</p>
+  </div></div>`;
+}
+
+/* ---------------- DRAWER (lien detail) ---------------- */
+function openLien(pid){
+  const p=PATIENTS.find(x=>x.id===pid); if(!p)return;
+  const stages=['Active Treatment','P&S / MMI Reached','Records Packaged','Sent to Attorney','Outstanding','Resolved'];
+  const cur=p.lifeIdx;
+  const billPct=Math.min(100,Math.round(p.billed/(p.targetHigh*1.3)*100));
+  const tLowPct=Math.round(p.targetLow/(p.targetHigh*1.3)*100);
+  const tHighPct=Math.round(p.targetHigh/(p.targetHigh*1.3)*100);
+  const paceFlag=p.pace==='over'?`<div class="flag bad">⚠ Possible overtreatment — billed (${money(p.billed)}) exceeds target range. Document medical necessity to defend the bill.</div>`
+    :p.pace==='under'?`<div class="flag warn">▽ Below target range at discharge — confirm findings are fully captured before sending.</div>`
+    :`<div class="flag ok">✓ On track — treatment is proportionate to the case value range.</div>`;
+  const reexamOver=p.life==='Active Treatment'&&p.reexamDue<daysAgo(0);
+  const d=document.getElementById('drawer');
+  d.innerHTML=`<div class="dh"><span class="x" onclick="closeDrawer()">✕</span>
+    <h3>${p.name}</h3><div class="meta">Lien case · ${p.firmName} · DOI ${fmtD(p.doi)}</div></div>
+  <div class="db">
+    <div class="panel"><h4>Valuation — vehicle damage basis</h4>
+      <div class="kv"><span class="k">Vehicle damage</span><span class="v">${p.damage}</span></div>
+      <div class="kv"><span class="k">Estimated case value</span><span class="v">${money(p.estLow)} – ${money(p.estHigh)}</span></div>
+      <div class="kv"><span class="k">Target treatment range</span><span class="v">${money(p.targetLow)} – ${money(p.targetHigh)}</span></div>
+      <div class="kv"><span class="k">Billed to date</span><span class="v">${money(p.billed)}</span></div>
+      <div class="mt8 gauge-wrap"><div class="bar"><div class="target-band" style="left:${tLowPct}%;width:${tHighPct-tLowPct}%"></div>
+        <i style="width:${billPct}%;background:${p.pace==='over'?'var(--red)':'var(--gold)'}"></i></div>
+        <div class="legend"><span><i style="background:var(--gold)"></i>Billed</span><span><i style="background:rgba(31,138,91,.4)"></i>Target range</span></div></div>
+      <p class="note">Vehicle damage is an internal value/expectation signal only — medical necessity rests on documented objective findings, not the damage.</p>
+    </div>
+    <div class="panel"><h4>Treatment pacing</h4>
+      <div class="kv"><span class="k">Visits</span><span class="v">${p.visits} of ${p.planVisits} planned</span></div>
+      <div class="kv"><span class="k">Per-visit charge</span><span class="v">${money(p.perVisit)}</span></div>
+      <div class="kv"><span class="k">Last visit</span><span class="v">${fmtD(p.lastVisit)}</span></div>
+      <div class="kv"><span class="k">30-day re-exam</span><span class="v">${reexamOver?'<span class="age-bad">Overdue</span>':fmtD(p.reexamDue)}</span></div>
+      <div class="mt8">${paceFlag}</div>
+    </div>
+    <div class="panel"><h4>Case lifecycle</h4><div class="steps">
+      ${stages.map((s,i)=>{const cls=i<cur?'done':i===cur?'now':'todo';return `<div class="step ${cls}"><div class="nd"></div><div><div class="lab">${s}</div>${i===cur?'<div class="dt">Current stage</div>':''}${s==='Sent to Attorney'&&p.sentDate?'<div class="dt">'+fmtD(p.sentDate)+'</div>':''}</div></div>`;}).join('')}
+    </div></div>
+    <div class="panel"><h4>Financials</h4>
+      <div class="kv"><span class="k">Billed total</span><span class="v">${money(p.billed)}</span></div>
+      <div class="kv"><span class="k">Reduction requested</span><span class="v">${p.reductionReq?money(p.reductionReq):'—'}</span></div>
+      <div class="kv"><span class="k">Net expected</span><span class="v">${money(p.billed-(p.reductionReq||0))}</span></div>
+      ${p.daysOpen?`<div class="kv"><span class="k">Days outstanding</span><span class="v">${ageCls(p.daysOpen)}</span></div>`:''}
+      ${p.reductionReq?'<div class="mt8"><span class="btn gold sm">Accept reduction</span> <span class="btn sm">Counter</span></div>':''}
+    </div>
+  </div>`;
+  d.classList.add('open');document.getElementById('dbg').classList.add('open');
+}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('dbg').classList.remove('open');}
+
+/* ---------------- ROUTER ---------------- */
+const TITLES={overview:['Executive Dashboard','Whole-practice view across cash, insurance, med-pay & liens'],
+  roster:['Patient Roster','Every patient, filterable by payment type'],
+  cash:['Cash — Quick Contact','One-click name & number for cash patients'],
+  medpay:['Med-Pay Tracker','Fast-paying cases — active count & ~14-day cycle'],
+  liens:['Lien Cases','Treatment pacing, valuation & lifecycle'],
+  ar:['Attorney A/R','Outstanding receivables by law firm'],
+  settings:['ECLIPSE Sync','Connect & map the system of record'],
+  intake:['Add Patient','Type or dictate — voice fills each field'],
+  schedule:['Schedule','Your Google Calendar — this week']};
+function go(view){
+  if(window.USER&&!canAccess(view))view='overview';
+  window._view=view;
+  clearCharts();
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===view));
+  document.getElementById('vtitle').textContent=TITLES[view][0];
+  document.getElementById('vsub').textContent=TITLES[view][1];
+  C.innerHTML=VIEWS[view]();
+  if(view==='overview')drawOverview();
+  if(view==='medpay')drawMedpay();
+  if(view==='todos'&&window.loadTodos)loadTodos();
+  if(view==='users'&&window.loadUsers)loadUsers();
+  window.scrollTo(0,0);
+}
+document.getElementById('nav').addEventListener('click',e=>{const a=e.target.closest('a');if(a)go(a.dataset.view);});
+document.getElementById('nb-all').textContent=PATIENTS.length;
+document.getElementById('nb-lien').textContent=liens.length;
+document.getElementById('lastsync').textContent='Synced 6:00 AM';
+
+/* ---------------- CHARTS ---------------- */
+const NAVY='#1a1f36',GOLD='#635bff',GREEN='#1a8245',AMBER='#bd8a18',RED='#c0392b',BLUE='#2f6fb0';
+function drawOverview(){
+  const cur=outstanding.filter(p=>p.daysOpen<=90).reduce((s,p)=>s+p.billed,0);
+  const watch=outstanding.filter(p=>p.daysOpen>90&&p.daysOpen<=365).reduce((s,p)=>s+p.billed,0);
+  const stale=outstanding.filter(p=>p.daysOpen>365).reduce((s,p)=>s+p.billed,0);
+  charts.push(new Chart(document.getElementById('ch-aging'),{type:'bar',
+    data:{labels:['0–90 days','91–365 days','365+ days'],datasets:[{data:[cur,watch,stale],
+      backgroundColor:[GREEN,AMBER,RED],borderRadius:6,barThickness:54}]},
+    options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'$'+c.raw.toLocaleString()}}},
+      scales:{y:{ticks:{callback:v=>'$'+(v/1000)+'k'},grid:{color:'#eef1f6'}},x:{grid:{display:false}}}}}));
+  charts.push(new Chart(document.getElementById('ch-mix'),{type:'doughnut',
+    data:{labels:['Cash','Insurance','Med-Pay','Lien'],datasets:[{data:[byType('Cash').length,byType('Insurance').length,medpays.length,liens.length],
+      backgroundColor:[GREEN,'#8895a6',BLUE,GOLD],borderWidth:2,borderColor:'#fff'}]},
+    options:{cutout:'62%',plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:12}}}}}}));
+  const months=['Jan','Feb','Mar','Apr','May','Jun'];
+  charts.push(new Chart(document.getElementById('ch-trend'),{type:'line',
+    data:{labels:months,datasets:[{label:'Collections',data:[38,41,46,44,52,58].map(v=>v*1000),
+      borderColor:GOLD,backgroundColor:'rgba(189,155,84,.12)',fill:true,tension:.35,pointBackgroundColor:GOLD,borderWidth:2.5}]},
+    options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'$'+c.raw.toLocaleString()}}},
+      scales:{y:{ticks:{callback:v=>'$'+(v/1000)+'k'},grid:{color:'#eef1f6'}},x:{grid:{display:false}}}}}));
+}
+function drawMedpay(){
+  charts.push(new Chart(document.getElementById('ch-mp'),{type:'bar',
+    data:{labels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[{data:[3,5,4,6,5,medpayNewMonth],
+      backgroundColor:BLUE,borderRadius:6,barThickness:40}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{grid:{color:'#eef1f6'},ticks:{stepSize:2}},x:{grid:{display:false}}}}}));
+}
+
+/* ---------------- VOICE TYPING (browser speech recognition) ---------------- */
+let _rec=null,_recBtn=null;
+function voiceSupported(){return !!(window.SpeechRecognition||window.webkitSpeechRecognition);}
+function dictate(targetId,btn){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){alert('Voice typing needs Chrome, Edge, or Safari.');return;}
+  if(_rec){_rec.stop();return;}
+  const el=document.getElementById(targetId); if(!el)return;
+  _rec=new SR(); _rec.lang='en-US'; _rec.interimResults=true; _rec.continuous=false;
+  _recBtn=btn; btn.classList.add('rec'); el.focus();
+  const base=el.value?el.value.replace(/\s+$/,'')+' ':'';
+  _rec.onresult=ev=>{let t='';for(let i=0;i<ev.results.length;i++)t+=ev.results[i][0].transcript;
+    el.value=base+t; el.dispatchEvent(new Event('input'));};
+  _rec.onerror=()=>endRec();
+  _rec.onend=()=>endRec();
+  _rec.start();
+}
+function endRec(){if(_recBtn)_recBtn.classList.remove('rec'); _rec=null; _recBtn=null;}
+function micBtn(id){return `<button class="mic" type="button" onclick="dictate('${id}',this)" title="Dictate" aria-label="Dictate this field">&#127908;</button>`;}
+
+/* ---------------- INTAKE: type or dictate a new patient ---------------- */
+function savePatient(){
+  const g=id=>(document.getElementById(id).value||'').trim();
+  const type=g('f_type');
+  if(!g('f_name')){document.getElementById('saveStatus').textContent='Add a patient name first.';return;}
+  const p={id:Math.max.apply(null,PATIENTS.map(x=>x.id))+1,name:g('f_name'),phone:g('f_phone'),
+    type:type,visits:1,billed:0,lastVisit:new Date('2026-06-16'),_new:true};
+  if(type==='Insurance')p.carrier=g('f_carrier');
+  if(type==='Med-Pay'){p.status='Active';p.startDate=new Date('2026-06-16');p.expectedPay=new Date('2026-06-30');p.received=0;}
+  if(type==='Lien'){p.firmName=g('f_firm')||'—';p.firm='f0';p.damage=g('f_damage')||'Minor';p.life='Active Treatment';
+    p.lifeIdx=0;p.planVisits=14;p.perVisit=140;p.estLow=3000;p.estHigh=7000;p.targetLow=600;p.targetHigh=2200;
+    p.doi=new Date('2026-06-16');p.reexamDue=new Date('2026-07-16');p.pace='ok';}
+  PATIENTS.unshift(p);
+  go('roster');
+  setTimeout(()=>{const tr=document.querySelector('#rtbl tbody tr'); if(tr)tr.style.background='var(--gold-soft)';},60);
+}
+function vfield(label,id,ph,full,rows){
+  const cls=full?'fld full':'fld';
+  const inp=rows?`<textarea id="${id}" rows="${rows}"></textarea>`:`<input id="${id}" placeholder="${ph||''}">`;
+  return `<div class="${cls}"><label>${label}</label><div class="vin">${inp}${micBtn(id)}</div></div>`;
+}
+function intakeHTML(){
+  const warn = voiceSupported() ? '' : '<div class="flag warn mb16" style="border-radius:10px"><span>⚠</span><span>Voice typing needs Chrome, Edge, or Safari. You can still type every field.</span></div>';
+  return `${warn}
+  <p style="color:var(--slate);font-size:13px;margin-bottom:16px">Add a patient by typing — or tap the <b>🎤</b> on any field and dictate. Read a handwritten note aloud and it types itself in. Click the mic again to stop.</p>
+  <div class="card"><div class="hd"><h3>New patient record</h3><span class="btn gold sm" onclick="savePatient()">Save patient →</span></div>
+    <div class="bd"><div class="formgrid">
+      ${vfield('Patient name','f_name')}
+      ${vfield('Phone','f_phone')}
+      <div class="fld"><label>Payment type</label><select id="f_type"><option>Cash</option><option>Insurance</option><option>Med-Pay</option><option>Lien</option></select></div>
+      ${vfield('Date of injury','f_doi','e.g. May 29 2026')}
+      ${vfield('Insurance carrier','f_carrier')}
+      <div class="fld"><label>Vehicle damage</label><select id="f_damage"><option>Minor</option><option>Moderate</option><option>Severe</option></select></div>
+      ${vfield('Attorney','f_attorney')}
+      ${vfield('Law firm','f_firm')}
+      ${vfield('Chief complaint','f_complaint','',true)}
+      ${vfield('Notes','f_notes','',true,3)}
+    </div>
+    <div id="saveStatus" class="note"></div></div>
+  </div>`;}
+
+/* ---------------- GOOGLE: Calendar ("Sign in with Google") ---------------- */
+window.gConnected=false; window._view='overview';
+const GOOGLE_G='<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 9.5c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 2.99 29.93 1 24 1 15.4 1 7.96 5.93 4.34 13.12l7.35 5.7C13.42 13.62 18.27 9.5 24 9.5z"/></svg>';
+function connectGoogle(){window.gConnected=true;go(window._view||'schedule');}
+function disconnectGoogle(){window.gConnected=false;go(window._view||'schedule');}
+function gateHTML(icon,title,desc){return `<div class="gate"><div class="gi">${icon}</div>
+  <h3 style="font-size:18px;color:var(--ink);margin:10px 0 4px">${title}</h3>
+  <p style="color:var(--slate);font-size:13px;max-width:430px;margin:0 auto 18px">${desc}</p>
+  <button class="gsign" onclick="connectGoogle()">${GOOGLE_G} Sign in with Google</button>
+  <div class="note" style="margin:14px auto 0;max-width:440px">Demo sign-in — loads a sample Google account so you can see the experience. The live “Log in with Google” needs the hosted version (backend + Google app approval for Calendar).</div></div>`;}
+function connbar(){return `<div class="connbar"><span>✓ Google connected</span><span class="who">· frontdesk@feelgoodchiro.com</span><span class="dc" onclick="disconnectGoogle()">Disconnect</span></div>`;}
+
+const CAL={
+ 'Mon 15':[{t:'8:30a',d:'New patient — auto injury',k:'pt'},{t:'11:00a',d:'Med-pay eval — A. Flores',k:'pt'},{t:'3:00p',d:'Call: Okafor Injury Group',k:'call'}],
+ 'Tue 16':[{t:'9:00a',d:'Adjustment — M. Banks',k:'pt'},{t:'10:30a',d:'Re-exam — H. Castillo (30-day)',k:'reexam'},{t:'2:00p',d:'Attorney call — Salazar (reduction)',k:'call'},{t:'4:00p',d:'Adjustment — G. Chen',k:'pt'}],
+ 'Wed 17':[{t:'9:30a',d:'Adjustment — L. Nguyen',k:'pt'},{t:'1:00p',d:'Package records — P. Shah',k:'admin'}],
+ 'Thu 18':[{t:'2:00p',d:'Follow-up — P. Shah',k:'pt'},{t:'3:30p',d:'New lien intake — Hartley & Cruz',k:'pt'}],
+ 'Fri 19':[{t:'10:00a',d:'Med-pay eval — new MVA',k:'pt'},{t:'12:00p',d:'Staff lunch',k:'admin'}],
+ 'Sat 20':[{t:'9:00a',d:'Saturday clinic (half day)',k:'admin'}]
+};
+function scheduleHTML(){
+  if(!window.gConnected) return gateHTML('📅','See your schedule in one place','Connect the practice Google account to view appointments, attorney calls and 30-day re-exams next to your patients.');
+  return connbar()+`<div class="cal">${Object.keys(CAL).map(day=>{const today=day==='Tue 16';
+    return `<div class="calday ${today?'today':''}"><div class="cdh">${day}${today?' · Today':''}</div>
+      <div class="evs">${CAL[day].map(e=>`<div class="event ${e.k}"><span class="tm">${e.t}</span> ${e.d}</div>`).join('')||'<div class="note">No events</div>'}</div></div>`;}).join('')}</div>`;}
+
+go('overview');
+</script>
+<script>
+/* ===== LIVE BACKEND WIRING (calendar only) ===== */
+(function(){
+  window.connectGoogle=function(){location.href='/auth/google';};
+  window.disconnectGoogle=async function(){try{await fetch('/auth/logout',{method:'POST'});}catch(e){} location.href='/';};
+  function todayKey(){const d=new Date();return d.toLocaleDateString('en-US',{weekday:'short'})+' '+d.getDate();}
+  window.scheduleHTML=function(){
+    if(!window.gConnected) return gateHTML('\u{1F4C5}','See your schedule in one place','Connect the practice Google account to view appointments, attorney calls and 30-day re-exams next to your patients.');
+    const tk=todayKey(); const days=Object.keys(CAL);
+    const body=days.length?days.map(day=>{const today=day===tk;
+      return `<div class="calday ${today?'today':''}"><div class="cdh">${day}${today?' \u00b7 Today':''}</div><div class="evs">${CAL[day].map(e=>`<div class="event ${e.k}"><span class="tm">${e.t}</span> ${e.d}</div>`).join('')||'<div class="note">No events</div>'}</div></div>`;}).join('')
+      :'<div class="note" style="padding:20px">No upcoming events in the next 7 days.</div>';
+    return connbar()+`<div class="cal">${body}</div>`;
+  };
+  async function refreshCalendar(){
+    try{const d=await fetch('/api/calendar').then(r=>r.json());if(!d.events)return;
+      for(const k in CAL)delete CAL[k];
+      d.events.forEach(ev=>{const dt=new Date(ev.start);
+        const day=dt.toLocaleDateString('en-US',{weekday:'short'})+' '+dt.getDate();
+        const t=ev.start.length>10?dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).replace(' ',''):'all day';
+        (CAL[day]=CAL[day]||[]).push({t,d:ev.title,k:'pt'});});
+    }catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded',async function(){
+    let me={connected:false};
+    try{me=await fetch('/api/me').then(r=>r.json());}catch(e){}
+    if(me.connected){
+      window.gConnected=true;
+      window.connbar=function(){return `<div class="connbar"><span>\u2713 Google connected</span><span class="who">\u00b7 ${me.email||''}</span><span class="dc" onclick="disconnectGoogle()">Disconnect</span></div>`;};
+      await refreshCalendar();
+      if(window._view==='schedule') go(window._view);
+    }
+  });
+})();
+</script>
+<style>
+#loginScreen{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center}
+#loginScreen.hide{display:none}
+.loginCard{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);width:360px;max-width:92vw;padding:30px 28px}
+.loginCard .lm{width:38px;height:38px;border-radius:9px;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;margin-bottom:16px}
+.loginCard h2{font-size:19px;color:var(--ink);font-weight:600}
+.loginCard p{color:var(--slate);font-size:13px;margin:3px 0 18px}
+.loginCard label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);font-weight:600;margin:0 0 5px}
+.loginCard input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:14px;font-family:inherit}
+.loginCard input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
+.loginCard button{width:100%;background:var(--gold);color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer}
+.loginErr{color:var(--red);font-size:12.5px;margin-bottom:10px;min-height:16px}
+.userchip{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.userchip .nm{font-weight:600;color:var(--ink)} .userchip .rl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--gold);font-weight:700}
+.userchip .lo{cursor:pointer;color:var(--slate);font-weight:600;border:1px solid var(--line);border-radius:7px;padding:5px 9px}
+.todo{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}
+.todo:last-child{border:none}
+.todo .ck{width:20px;height:20px;border:2px solid #ccd3dd;border-radius:6px;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
+.todo.done .ck{background:var(--green);border-color:var(--green)}
+.todo.done .t{text-decoration:line-through;color:var(--slate)}
+.todo .t{flex:1;font-size:13.5px;color:var(--ink)} .todo .meta{font-size:11.5px;color:var(--slate)}
+.todo .who{font-size:10.5px;font-weight:700;background:var(--gold-soft);color:var(--gold);border-radius:20px;padding:2px 9px}
+.todo .del{cursor:pointer;color:var(--slate);font-size:17px;line-height:1}
+.perm{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:#f4f7fb;border:1px solid var(--line);border-radius:20px;padding:4px 11px;margin:3px 6px 3px 0;cursor:pointer;color:var(--slate)}
+.perm.on{background:var(--gold-soft);border-color:#d9d1f7;color:var(--gold);font-weight:600}
+.roletag{font-size:10.5px;font-weight:700;text-transform:uppercase;border-radius:20px;padding:2px 9px}
+.roletag.admin{background:var(--gold-soft);color:var(--gold)} .roletag.staff{background:#eef0f3;color:var(--slate)}
+</style>
+<script>
+(function(){
+  const SECTIONS=[['overview','Overview'],['schedule','Schedule'],['patients','Patients'],['cash','Cash list'],['medpay','Med-Pay'],['liens','Liens'],['ar','Attorney A/R'],['intake','Add Patient'],['settings','ECLIPSE Sync']];
+  const $=id=>document.getElementById(id);
+  async function api(url,opts){const r=await fetch(url,Object.assign({headers:{'Content-Type':'application/json'}},opts||{}));return r.json().catch(()=>({}));}
+  window.USER=null;
+
+  window.canAccess=function(view){const u=window.USER;if(!u)return false;if(u.role==='admin')return true;
+    if(view==='users'||view==='settings')return false; if(view==='overview'||view==='todos')return true;
+    return (u.sections||[]).includes(view);};
+
+  window.applyPermissions=function(){
+    document.querySelectorAll('#nav a[data-view]').forEach(a=>{a.style.display=canAccess(a.dataset.view)?'':'none';});
+  };
+  function mountUserChip(u){
+    const right=document.querySelector('.topbar .right'); if(!right)return;
+    let chip=$('userchip'); if(!chip){chip=document.createElement('div');chip.id='userchip';chip.className='userchip';right.insertBefore(chip,right.firstChild);}
+    chip.innerHTML=`<div style="text-align:right"><span class="nm">${u.name}</span><br><span class="rl">${u.role}</span></div><span class="lo" onclick="appLogout()">Sign out</span>`;
+  }
+  window.appLogout=async function(){await api('/api/auth/logout',{method:'POST'});location.reload();};
+  function startApp(u){window.USER=u;$('loginScreen').classList.add('hide');mountUserChip(u);applyPermissions();
+    go(canAccess(window._view)?window._view:'overview');}
+  window.doLogin=async function(){$('loginErr').textContent='';
+    const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email:$('li_email').value,password:$('li_pass').value})});
+    if(r.user)startApp(r.user); else $('loginErr').textContent=r.error||'Login failed';};
+  document.addEventListener('DOMContentLoaded',async function(){
+    const f=$('loginForm'); if(f)f.addEventListener('submit',e=>{e.preventDefault();doLogin();});
+    const r=await api('/api/auth/me'); if(r.user)startApp(r.user); else $('loginScreen').classList.remove('hide');
+  });
+
+  /* To-Do */
+  let TODO_FILTER='';
+  window.todosHTML=function(){const admin=window.USER&&window.USER.role==='admin';
+    return `<div class="card mb16"><div class="hd"><h3>Add a task</h3></div><div class="bd">
+      <div class="vin"><input id="td_title" placeholder="What needs doing?">${micBtn('td_title')}</div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+        ${admin?'<select id="td_user" style="border:1px solid var(--line);border-radius:8px;padding:9px"></select>':''}
+        <input id="td_due" placeholder="Due (optional)" style="border:1px solid var(--line);border-radius:8px;padding:9px;max-width:170px">
+        <button class="btn gold" onclick="addTodo()">Add task</button></div></div></div>
+      ${admin?'<div class="toolbar"><div class="chips" id="td_filters"></div></div>':''}
+      <div class="card"><div class="hd"><h3>${admin?'Team tasks':'My tasks'}</h3></div><div class="bd" id="todoList">Loading…</div></div>`;};
+  window.loadTodos=async function(){const admin=window.USER&&window.USER.role==='admin';
+    if(admin){const us=await api('/api/users');window._users=us.users||[];
+      const sel=$('td_user'); if(sel)sel.innerHTML=window._users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
+      const fl=$('td_filters'); if(fl)fl.innerHTML=`<div class="chip ${!TODO_FILTER?'active':''}" onclick="setTodoFilter('')">Everyone</div>`+window._users.map(u=>`<div class="chip ${TODO_FILTER==u.id?'active':''}" onclick="setTodoFilter('${u.id}')">${u.name}</div>`).join('');}
+    const r=await api('/api/todos'+((admin&&TODO_FILTER)?('?user='+TODO_FILTER):'')); const list=r.todos||[];
+    const names={}; (window._users||[]).forEach(u=>names[u.id]=u.name);
+    const host=$('todoList'); if(!host)return;
+    host.innerHTML=list.length?list.map(t=>`<div class="todo ${t.done?'done':''}">
+      <div class="ck" onclick="toggleTodo(${t.id},${!t.done})">${t.done?'✓':''}</div>
+      <div class="t">${t.title}${t.due?` <span class="meta">· due ${t.due}</span>`:''}</div>
+      ${admin?`<span class="who">${names[t.assignedTo]||'—'}</span>`:''}
+      <span class="del" onclick="delTodo(${t.id})">×</span></div>`).join(''):'<div class="note">No tasks yet.</div>';};
+  window.setTodoFilter=function(v){TODO_FILTER=v;loadTodos();};
+  window.addTodo=async function(){const title=$('td_title').value.trim();if(!title)return;
+    const body={title,due:$('td_due').value.trim()};
+    if(window.USER.role==='admin'&&$('td_user'))body.assignedTo=$('td_user').value;
+    await api('/api/todos',{method:'POST',body:JSON.stringify(body)});$('td_title').value='';$('td_due').value='';loadTodos();};
+  window.toggleTodo=async function(id,done){await api('/api/todos/'+id,{method:'PATCH',body:JSON.stringify({done})});loadTodos();};
+  window.delTodo=async function(id){await api('/api/todos/'+id,{method:'DELETE'});loadTodos();};
+
+  /* Users & Access (admin) */
+  window.usersHTML=function(){return `<div class="card mb16"><div class="hd"><h3>Add staff member</h3></div><div class="bd">
+      <div class="formgrid">
+        <div class="fld"><label>Name</label><input id="nu_name"></div>
+        <div class="fld"><label>Email</label><input id="nu_email"></div>
+        <div class="fld"><label>Temporary password</label><input id="nu_pass"></div>
+        <div class="fld"><label>Role</label><select id="nu_role"><option value="staff">Staff</option><option value="admin">Admin</option></select></div>
+      </div><button class="btn gold" onclick="addUser()">Create user</button> <span id="nu_status" class="note"></span></div></div>
+      <div class="card"><div class="hd"><h3>Team &amp; access</h3></div><div class="bd" id="userList">Loading…</div></div>`;};
+  window.loadUsers=async function(){const r=await api('/api/users');const us=r.users||[];const host=$('userList');if(!host)return;
+    host.innerHTML=us.map(u=>`<div style="padding:14px 0;border-bottom:1px solid var(--line)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <b style="color:var(--ink)">${u.name}</b> <span class="roletag ${u.role}">${u.role}</span>
+        <span class="note">${u.email}${u.active?'':' · disabled'}</span>
+        <span style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn sm" onclick="resetPass(${u.id})">Reset password</button>
+          ${u.id!==1?`<button class="btn sm" onclick="toggleActive(${u.id},${!u.active})">${u.active?'Disable':'Enable'}</button>`:''}
+          ${u.id!==1?`<button class="btn sm" onclick="delUser(${u.id})">Delete</button>`:''}
+        </span></div>
+      ${u.role==='admin'?'<div class="note">Full access (admin)</div>':`<div>${SECTIONS.map(s=>`<span class="perm ${(u.sections||[]).includes(s[0])?'on':''}" onclick="togglePerm(${u.id},'${s[0]}')">${(u.sections||[]).includes(s[0])?'✓ ':''}${s[1]}</span>`).join('')}</div>`}
+    </div>`).join('');};
+  window.addUser=async function(){const r=await api('/api/users',{method:'POST',body:JSON.stringify({name:$('nu_name').value.trim(),email:$('nu_email').value.trim(),password:$('nu_pass').value,role:$('nu_role').value})});
+    $('nu_status').textContent=r.user?'✓ Created':(r.error||'Error');
+    if(r.user){$('nu_name').value='';$('nu_email').value='';$('nu_pass').value='';loadUsers();}};
+  window.togglePerm=async function(id,sec){const r=await api('/api/users');const u=(r.users||[]).find(x=>x.id===id);if(!u)return;
+    const s=new Set(u.sections||[]); s.has(sec)?s.delete(sec):s.add(sec);
+    await api('/api/users/'+id,{method:'PATCH',body:JSON.stringify({sections:[...s]})});loadUsers();};
+  window.toggleActive=async function(id,active){await api('/api/users/'+id,{method:'PATCH',body:JSON.stringify({active})});loadUsers();};
+  window.resetPass=async function(id){const p=prompt('New temporary password:');if(!p)return;await api('/api/users/'+id,{method:'PATCH',body:JSON.stringify({password:p})});alert('Password updated.');};
+  window.delUser=async function(id){if(!confirm('Delete this user?'))return;await api('/api/users/'+id,{method:'DELETE'});loadUsers();};
+
+  VIEWS.todos=window.todosHTML; VIEWS.users=window.usersHTML;
+  TITLES.todos=['To-Do','Tasks for you and your team']; TITLES.users=['Users & Access','Add staff and control what they can see'];
+})();
+</script>
+</body>
+</html>

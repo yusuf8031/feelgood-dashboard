@@ -1,0 +1,21 @@
+{
+  "name": "feelgood-dashboard",
+  "version": "1.0.0",
+  "description": "Feel Good Chiropractic — Practice Command Center with Sign in with Google (Gmail + Calendar)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "googleapis": "^144.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

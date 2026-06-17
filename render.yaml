@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: feelgood-dashboard
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true        # Render makes a strong random value
+      - key: ADMIN_EMAIL
+        sync: false                # set your admin email in the dashboard
+      - key: ADMIN_PASSWORD
+        sync: false                # set a strong admin password in the dashboard
+      # Optional — only needed for the Google Calendar "Sign in with Google":
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false                # https://YOUR-APP.onrender.com/auth/google/callback
