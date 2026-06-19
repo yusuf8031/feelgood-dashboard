@@ -1389,5 +1389,33 @@ tbody tr.clk{cursor:pointer} tbody tr.clk:hover{background:#f6f8fd}
   };
 })();
 </script>
+<script>
+/* v8: firm clickable ONLY in the "Outstanding by law firm" table */
+(function(){
+  const yearOf=s=>{const m=(s||'').match(/(\d{2,4})\s*$/);if(!m)return 0;let y=m[1];if(y.length===2)y='20'+y;return +y;};
+  const solRisk=l=>{const d=l.detail||{};return (d.solDaysLeft<=0&&(d.courtStatus||'').indexOf('Not filed')===0)||(d.solDaysLeft>0&&d.solDaysLeft<180);};
+  const stat=l=>l.status?'<span class="roletag admin" style="background:var(--amber-soft);color:var(--amber)">'+l.status+'</span>':'<span class="note">—</span>';
+
+  /* lien table: plain firm text (no link) */
+  window.renderBoardRows=function(list){const tb=document.querySelector('#lt tbody');if(!tb)return;
+    tb.innerHTML=list.map(l=>`<tr class="clk" onclick="openRecord(${l.id})"><td><b>${l.patient}</b><br><span class="note">${l.attorney}</span></td><td>${l.firm}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${stat(l)}</td><td>${solRisk(l)?'⚠':''} ⚖</td></tr>`).join('');};
+
+  const _lb=window.loadBoard;
+  window.loadBoard=async function(){await _lb();
+    /* by-firm table: firm name is an obvious clickable link */
+    const liens=window._liens||[]; const total=liens.reduce((s,l)=>s+l.balance,0)||1;
+    const by={}; liens.forEach(l=>{const x=by[l.firm]=by[l.firm]||{firm:l.firm,c:0,o:0};x.c++;x.o+=l.balance;});
+    const rows=Object.values(by).sort((a,b)=>b.o-a.o);
+    const bf=document.getElementById('bf');
+    if(bf)bf.innerHTML='<table><thead><tr><th>Law Firm</th><th>Liens</th><th>Outstanding</th><th>%</th></tr></thead><tbody>'+
+      rows.map(f=>`<tr class="clk" onclick="openFirm('${f.firm.replace(/'/g,"\\'")}')"><td><span style="color:var(--gold);font-weight:700;text-decoration:underline;text-underline-offset:2px">${f.firm}</span> <span class="note">›</span></td><td>${f.c}</td><td>${money(f.o)}</td><td>${Math.round(f.o/total*100)}%</td></tr>`).join('')+'</tbody></table>';
+    /* chase list: plain firm text (not clickable) */
+    const chase=liens.filter(l=>(l.status&&l.status.indexOf('Settled')===0)||(yearOf(l.recordsSent)&&yearOf(l.recordsSent)<=2024)||solRisk(l));
+    chase.sort((a,b)=>{const x=(a.status||'').indexOf('Settled')===0?0:1,y=(b.status||'').indexOf('Settled')===0?0:1;return x-y||yearOf(a.recordsSent)-yearOf(b.recordsSent);});
+    const cb=document.querySelector('#chase tbody');
+    if(cb)cb.innerHTML=chase.map(l=>`<tr class="clk" onclick="openRecord(${l.id})"><td><b>${l.patient}</b></td><td>${l.firm}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${l.status||(solRisk(l)?'<span style="color:var(--red)">SOL risk</span>':'aged')}</td><td>⚖</td></tr>`).join('')||'<tr><td colspan="6" class="note" style="padding:14px">Nothing flagged.</td></tr>';
+  };
+})();
+</script>
 </body>
 </html>
