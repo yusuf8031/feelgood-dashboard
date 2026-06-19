@@ -1066,5 +1066,102 @@ go('overview');
   });
 })();
 </script>
+<style>
+.rec-sol{font-size:11px;font-weight:700;border-radius:20px;padding:3px 10px}
+.thread{display:flex;flex-direction:column;gap:9px;margin:6px 0 12px;max-height:320px;overflow:auto}
+.bub{max-width:88%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.45}
+.bub .who{font-size:10.5px;font-weight:700;margin-bottom:3px;opacity:.85}
+.bub .tm{font-size:10px;color:var(--slate);margin-top:4px}
+.bub.firm{align-self:flex-end;background:var(--blue-soft);border:1px solid #d4e6fa}
+.bub.firm .who{color:var(--blue)}
+.bub.prac{align-self:flex-start;background:var(--gold-soft);border:1px solid #e6def7}
+.bub.prac .who{color:var(--gold)}
+tbody tr.clk{cursor:pointer} tbody tr.clk:hover{background:#f6f8fd}
+</style>
+<script>
+/* ===== v3: rich patient record + shared notes thread ===== */
+(function(){
+  const $=id=>document.getElementById(id);
+  const api=async (u,o)=>{try{return await fetch(u,o).then(r=>r.json());}catch(e){return {};}};
+  function solChip(d){const n=d.solDaysLeft;const notFiled=(d.courtStatus||'').indexOf('Not filed')===0;
+    if(n<=0&&notFiled)return '<span class="rec-sol" style="background:var(--red-soft);color:var(--red)">⚠ Statute of limitations PASSED — not filed</span>';
+    if(n<=0)return '<span class="rec-sol" style="background:#eef0f3;color:var(--slate)">SOL date passed · '+d.solDate+'</span>';
+    if(n<180)return '<span class="rec-sol" style="background:var(--amber-soft);color:var(--amber)">⏳ SOL in '+n+' days · '+d.solDate+'</span>';
+    return '<span class="rec-sol" style="background:var(--green-soft);color:var(--green)">SOL OK · '+d.solDate+'</span>';}
+  function statusChip(s){if(!s)return '';const c=s.indexOf('Settled')===0?['var(--amber-soft)','var(--amber)']:s==='Paid'?['var(--green-soft)','var(--green)']:['var(--blue-soft)','var(--blue)'];
+    return `<span class="rec-sol" style="background:${c[0]};color:${c[1]}">Firm: ${s}</span>`;}
+  const kv=(k,v)=>`<div class="kv"><span class="k">${k}</span><span class="v">${v||'—'}</span></div>`;
+
+  window.openRecord=async function(id){
+    const r=await api('/api/liens/'+id); if(!r.lien)return; const p=r.lien,d=p.detail||{};
+    const notes=(r.notes||[]).map(n=>`<div class="bub ${n.role==='firm'?'firm':'prac'}"><div class="who">${n.side} · ${n.by}</div>${n.text.replace(/</g,'&lt;')}<div class="tm">${n.at}</div></div>`).join('')||'<div class="note">No notes yet. Start the conversation — both sides will see it.</div>';
+    const dr=$('drawer'); if(!dr)return;
+    dr.innerHTML=`<div class="dh"><span class="x" onclick="closeDrawer()">✕</span>
+      <h3>${p.patient}</h3><div class="meta">${p.firm} · ${p.attorney} · balance ${money(p.balance)}</div>
+      <div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">${solChip(d)}${statusChip(p.status)}</div></div>
+    <div class="db">
+      <div class="panel"><h4>Accident &amp; injury</h4>
+        ${kv('Date of accident',d.dateOfAccident)}${kv('Accident type',d.accidentType)}${kv('Injuries / complaint',d.injuries)}${kv('Date of birth',d.dob)}${kv('Patient phone',d.phone)}</div>
+      <div class="panel"><h4>Treatment</h4>
+        ${kv('Treatment start',d.treatmentStart)}${kv('Last visit',d.lastVisit)}${kv('Visits',d.visits)}${kv('Frequency',d.frequency)}${kv('Modalities',d.modalities)}${kv('Referred out',d.referrals)}${kv('Final / P&S report',d.narrativeStatus)}</div>
+      <div class="panel"><h4>Legal &amp; insurance</h4>
+        ${kv('Attorney',p.attorney)}${kv('Case manager',d.caseManager)}${kv('Attorney phone',d.attorneyPhone)}${kv('Attorney email',d.attorneyEmail)}${kv('Court case #',d.caseNumber)}${kv('Court status',d.courtStatus)}${kv('LOP on file',d.lopOnFile)}${kv('At-fault insurer',d.insuranceCarrier)}${kv('Claim #',d.claimNumber)}${kv('Adjuster',d.adjuster)}
+        <a class="btn sm mt8" href="https://trellis.law/cases/${encodeURIComponent(p.patient.replace(/\(.*?\)/g,'').trim())}?county=Fresno" target="_blank">⚖ Check court records on Trellis</a></div>
+      <div class="panel"><h4>Financial</h4>
+        ${kv('Lien balance owed',money(p.balance))}${kv('Est. case value',money(d.estLow)+' – '+money(d.estHigh))}${kv('Records sent',p.recordsSent)}${kv('Stage',d.stage)}</div>
+      <div class="panel"><h4>Shared notes — Feel Good ⇄ ${p.firm}</h4>
+        <p class="note" style="margin:0 0 8px">Both the practice and the firm see this thread. Log what was said, requests, reductions, settlement word.</p>
+        <div class="thread">${notes}</div>
+        <div class="vin"><textarea id="notebox" rows="2" placeholder="Add a note both sides can see…"></textarea></div>
+        <button class="btn gold sm mt8" onclick="addNote(${p.id})">Post note</button> <span id="notestatus" class="note"></span></div>
+    </div>`;
+    dr.classList.add('open'); $('dbg').classList.add('open');
+  };
+  window.addNote=async function(id){const t=($('notebox').value||'').trim();if(!t){$('notestatus').textContent='Type a note first.';return;}
+    await api('/api/liens/'+id+'/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});
+    openRecord(id);};
+
+  /* make rows clickable + add SOL signal to the board */
+  function yearOf(s){const m=(s||'').match(/(\d{2,4})\s*$/);if(!m)return 0;let y=m[1];if(y.length===2)y='20'+y;return +y;}
+  function solRisk(l){const d=l.detail||{};return (d.solDaysLeft<=0&&(d.courtStatus||'').indexOf('Not filed')===0)||(d.solDaysLeft>0&&d.solDaysLeft<180);}
+  window.renderBoardRows=function(list){const tb=document.querySelector('#lt tbody');if(!tb)return;
+    tb.innerHTML=list.map(l=>`<tr class="clk" onclick="openRecord(${l.id})"><td><b>${l.patient}</b><br><span class="note">${l.attorney}</span></td><td>${l.firm}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${l.status?'<span class="roletag admin" style="background:var(--amber-soft);color:var(--amber)">'+l.status+'</span>':'<span class="note">—</span>'}</td><td>${solRisk(l)?'⚠':''} ⚖</td></tr>`).join('');};
+  window.filterLiens=function(){const q=($('lq').value||'').toLowerCase();
+    window.renderBoardRows((window._liens||[]).filter(l=>(l.patient+' '+l.firm+' '+l.attorney).toLowerCase().includes(q)));};
+  window.loadBoard=async function(){
+    const s=await api('/api/liens/summary');const d=await api('/api/liens');window._liens=d.liens||[];
+    const chase=(window._liens).filter(l=>(l.status&&l.status.indexOf('Settled')===0)||(yearOf(l.recordsSent)&&yearOf(l.recordsSent)<=2024)||solRisk(l));
+    const solCount=(window._liens).filter(solRisk).length;
+    if($('bk'))$('bk').innerHTML=
+      kpi('Total Outstanding',money(s.total||0),(s.count||0)+' open liens · DRAFT','gold')+
+      kpi('Needs Follow-up',chase.length,'aged · settled · SOL risk','red')+
+      kpi('Statute-of-Limits Risk',solCount,'≤180 days or passed unfiled','red')+
+      kpi('Law Firms',(s.firms||0),'with money outstanding','blue');
+    if($('chasecount'))$('chasecount').textContent=chase.length+' to chase';
+    chase.sort((a,b)=>{const x=(a.status||'').indexOf('Settled')===0?0:1,y=(b.status||'').indexOf('Settled')===0?0:1;return x-y||yearOf(a.recordsSent)-yearOf(b.recordsSent);});
+    const cb=document.querySelector('#chase tbody');
+    if(cb)cb.innerHTML=chase.map(l=>`<tr class="clk" onclick="openRecord(${l.id})"><td><b>${l.patient}</b></td><td>${l.firm}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${l.status||(solRisk(l)?'<span style="color:var(--red)">SOL risk</span>':'aged')}</td><td>⚖</td></tr>`).join('')||'<tr><td colspan="6" class="note" style="padding:14px">Nothing flagged.</td></tr>';
+    if($('bf'))$('bf').innerHTML='<table><thead><tr><th>Law Firm</th><th>Liens</th><th>Outstanding</th><th>%</th></tr></thead><tbody>'+(s.byFirm||[]).map(f=>`<tr><td><b>${f.firm}</b></td><td>${f.count}</td><td>${money(f.outstanding)}</td><td>${Math.round(f.outstanding/(s.total||1)*100)}%</td></tr>`).join('')+'</tbody></table>';
+    const yrs={};(window._liens).forEach(l=>{const y=yearOf(l.recordsSent)||'?';(yrs[y]=yrs[y]||{c:0,v:0}).c++;yrs[y].v+=l.balance;});
+    if($('by'))$('by').innerHTML='<table><thead><tr><th>Records sent</th><th>Liens</th><th>Outstanding</th></tr></thead><tbody>'+Object.keys(yrs).sort().map(y=>`<tr><td>${y}</td><td>${yrs[y].c}</td><td>${money(yrs[y].v)}</td></tr>`).join('')+'</tbody></table>';
+    window.renderBoardRows(window._liens);
+  };
+  window.loadFirm=async function(){
+    const s=await api('/api/liens/summary');const d=await api('/api/liens');const firm=(window.USER&&window.USER.firm)||'';
+    if($('fpname'))$('fpname').textContent='· '+firm;
+    const paid=(s.paid&&s.paid[firm])||0;const avg=s.count?Math.round(s.total/s.count):0;
+    if($('fk'))$('fk').innerHTML=
+      kpi('Outstanding to Provider',money(s.total||0),(s.count||0)+' open liens','gold')+
+      kpi('Open Liens',(s.count||0),'awaiting settlement','blue')+
+      kpi('Avg Lien',money(avg),'per patient','green')+
+      kpi('Paid to Provider (12 mo)',money(paid),'estimated · DRAFT','gold');
+    const STAT=['','Open / pending','In litigation','Settled — payment coming','Reduction requested','Paid'];
+    const opt=cur=>STAT.map(o=>`<option ${o===cur?'selected':''}>${o||'— set status —'}</option>`).join('');
+    const tb=document.querySelector('#ft tbody');
+    if(tb)tb.innerHTML=(d.liens||[]).map(l=>`<tr class="clk"><td onclick="openRecord(${l.id})"><b>${l.patient}</b></td><td onclick="openRecord(${l.id})">${l.attorney}</td><td onclick="openRecord(${l.id})">${money(l.balance)}</td><td onclick="openRecord(${l.id})">${l.recordsSent||'—'}</td>
+      <td><select onclick="event.stopPropagation()" onchange="setLienStatus(${l.id},this.value)" style="border:1px solid var(--line);border-radius:7px;padding:6px;font-size:12px">${opt(l.status)}</select></td></tr>`).join('');
+  };
+})();
+</script>
 </body>
 </html>

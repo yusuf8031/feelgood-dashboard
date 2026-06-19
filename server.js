@@ -40,6 +40,7 @@ function saveDB() {
 }
 let db = loadDB();
 if (!db.lienStatus) db.lienStatus = {};   // { lienId: {status, note, by, at} } — firm-reported case status
+if (!db.lienNotes) db.lienNotes = {};     // { lienId: [ {by, role, at, text} ] } — shared communication thread
 function nextId() { db.seq = (db.seq || 1) + 1; return db.seq; }
 
 // Outstanding-lien data (transcribed from the practice ledger; draft figures).
@@ -249,6 +250,27 @@ app.post('/api/liens/:id/status', requireAuth, (req, res) => {
   db.lienStatus[l.id] = { status: status || '', note: note || '', by: req.user.name, at: new Date().toISOString().slice(0, 10) };
   saveDB();
   res.json({ ok: true });
+});
+
+// Full patient/lien record (detail + status + shared notes)
+app.get('/api/liens/:id', requireAuth, (req, res) => {
+  const l = LIENS.find(x => x.id == req.params.id);
+  if (!l) return res.status(404).json({ error: 'not found' });
+  if (req.user.role === 'firm' && l.firm !== req.user.firm) return res.status(403).json({ error: 'forbidden' });
+  res.json({ lien: withStatus(l), notes: db.lienNotes[l.id] || [], viewer: { name: req.user.name, role: req.user.role } });
+});
+
+// Add a note to the shared communication thread
+app.post('/api/liens/:id/notes', requireAuth, (req, res) => {
+  const l = LIENS.find(x => x.id == req.params.id);
+  if (!l) return res.status(404).json({ error: 'not found' });
+  if (req.user.role === 'firm' && l.firm !== req.user.firm) return res.status(403).json({ error: 'forbidden' });
+  const text = (req.body && req.body.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'empty' });
+  const who = req.user.role === 'firm' ? (req.user.firm || 'Law firm') : 'Feel Good Chiropractic';
+  (db.lienNotes[l.id] = db.lienNotes[l.id] || []).push({ by: req.user.name, side: who, role: req.user.role, at: new Date().toISOString().slice(0, 16).replace('T', ' '), text });
+  saveDB();
+  res.json({ ok: true, notes: db.lienNotes[l.id] });
 });
 app.get('/api/liens/summary', requireAuth, (req, res) => {
   const ls = visibleLiens(req.user);
