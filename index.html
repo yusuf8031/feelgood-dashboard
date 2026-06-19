@@ -1417,5 +1417,64 @@ tbody tr.clk{cursor:pointer} tbody tr.clk:hover{background:#f6f8fd}
   };
 })();
 </script>
+<script>
+/* v9: add patient + edit record */
+(function(){
+  const $=id=>document.getElementById(id);
+  const val=id=>{const e=$(id);return e?e.value.trim():'';};
+  const num=id=>{const v=val(id).replace(/[$,]/g,'');return v?Number(v):0;};
+  const esc=s=>(s==null?'':String(s)).replace(/"/g,'&quot;');
+  const fI=(label,id,v,ph,full)=>`<div class="fld${full?' full':''}"><label>${label}</label><input id="${id}" value="${esc(v)}" placeholder="${ph||''}"></div>`;
+
+  function recordForm(v,saveCall){const d=v.detail||{};return `<div class="db">
+    <div class="formgrid">
+      ${fI('Patient name','e_patient',v.patient)}${fI('Law firm','e_firm',v.firm,'e.g. Paboojian & Bell, Inc.')}
+      ${fI('Attorney','e_attorney',v.attorney)}${fI('Attorney email','e_attEmail',d.attorneyEmail)}
+      ${fI('Lien balance / owed ($)','e_balance',v.balance)}${fI('Records sent','e_recordsSent',v.recordsSent)}
+      ${fI('Final / P&S date','e_finalDate',v.finalDate)}${fI('Date of accident','e_doa',d.dateOfAccident,'e.g. Sep 13, 2024')}
+      ${fI('Accident type','e_accidentType',d.accidentType)}${fI('Date of birth','e_dob',d.dob)}
+      ${fI('Injuries / complaint','e_injuries',d.injuries,'',true)}
+      ${fI('Patient phone','e_phone',d.phone)}${fI('Visits','e_visits',d.visits)}
+      ${fI('Treatment start','e_tstart',d.treatmentStart)}${fI('Last visit','e_lastVisit',d.lastVisit)}
+      ${fI('Court case #','e_caseNumber',d.caseNumber)}${fI('Court status','e_courtStatus',d.courtStatus)}
+      ${fI('At-fault insurer','e_carrier',d.insuranceCarrier)}${fI('Claim #','e_claim',d.claimNumber)}
+      ${fI('Adjuster','e_adjuster',d.adjuster)}${fI('Stage','e_stage',d.stage)}
+      ${fI('Reduction requested ($)','e_redReq',d.reductionRequested)}${fI('Reduction agreed ($)','e_redAgr',d.reductionAgreed)}
+      ${fI('Paid to date ($)','e_paid',d.paid)}
+    </div>
+    <div style="margin-top:16px"><button class="btn gold" onclick="${saveCall}">Save</button> <button class="btn" onclick="closeDrawer()">Cancel</button> <span id="formStatus" class="note"></span></div>
+  </div>`;}
+  function gather(){return {patient:val('e_patient'),firm:val('e_firm')||'NEEDS RESEARCH / CONFIRM',attorney:val('e_attorney'),balance:num('e_balance'),recordsSent:val('e_recordsSent'),finalDate:val('e_finalDate'),
+    detail:{dateOfAccident:val('e_doa'),accidentType:val('e_accidentType'),injuries:val('e_injuries'),dob:val('e_dob'),phone:val('e_phone'),treatmentStart:val('e_tstart'),lastVisit:val('e_lastVisit'),visits:num('e_visits'),caseNumber:val('e_caseNumber'),courtStatus:val('e_courtStatus'),insuranceCarrier:val('e_carrier'),claimNumber:val('e_claim'),adjuster:val('e_adjuster'),attorneyEmail:val('e_attEmail'),reductionRequested:num('e_redReq'),reductionAgreed:num('e_redAgr'),paid:num('e_paid'),stage:val('e_stage')}};}
+
+  window.addPatient=function(){const dr=$('drawer');if(!dr)return;
+    dr.innerHTML=`<div class="dh"><span class="x" onclick="closeDrawer()">✕</span><h3>Add patient</h3><div class="meta">Create a new lien record</div></div>${recordForm({},'submitNew()')}`;
+    dr.classList.add('open');$('dbg').classList.add('open');};
+  window.editRecord=async function(id){const r=await fetch('/api/liens/'+id).then(r=>r.json());if(!r.lien)return;const dr=$('drawer');
+    dr.innerHTML=`<div class="dh"><span class="x" onclick="closeDrawer()">✕</span><h3>Edit — ${r.lien.patient}</h3><div class="meta">Update this record</div></div>${recordForm(r.lien,'submitEdit('+id+')')}`;
+    dr.classList.add('open');$('dbg').classList.add('open');};
+  window.submitNew=async function(){const b=gather();if(!b.patient){$('formStatus').textContent='Patient name is required.';return;}
+    $('formStatus').textContent='Saving…';
+    const r=await fetch('/api/liens',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
+    if(r.lien){if(window._view==='board')await loadBoard();openRecord(r.lien.id);}else $('formStatus').textContent=r.error||'Error';};
+  window.submitEdit=async function(id){const b=gather();$('formStatus').textContent='Saving…';
+    const r=await fetch('/api/liens/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
+    if(r.lien){if(window._view==='board')await loadBoard();openRecord(id);}else $('formStatus').textContent=r.error||'Error';};
+
+  /* "+ Add patient" floating button (admin/staff only) */
+  function ensureFab(){const u=window.USER;if(!u||u.role==='firm')return;if($('addFab'))return;
+    const b=document.createElement('button');b.id='addFab';b.textContent='＋ Add patient';
+    b.style.cssText='position:fixed;right:26px;bottom:26px;z-index:60;background:var(--gold);color:#fff;border:none;border-radius:30px;padding:13px 22px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 6px 22px rgba(99,91,255,.4)';
+    b.onclick=window.addPatient;document.body.appendChild(b);}
+  const _lb=window.loadBoard;
+  window.loadBoard=async function(){await _lb();ensureFab();};
+
+  /* inject "Edit" into the patient record drawer header (admin/staff) */
+  const _or=window.openRecord;
+  window.openRecord=async function(id){await _or(id);const u=window.USER;if(!u||u.role==='firm')return;
+    const dh=document.querySelector('#drawer .dh');if(dh&&!dh.querySelector('.editbtn')){const e=document.createElement('span');e.className='editbtn';e.textContent='✎ Edit';
+      e.style.cssText='position:absolute;right:50px;top:21px;cursor:pointer;color:var(--gold);font-weight:600;font-size:13px';e.onclick=()=>editRecord(id);dh.appendChild(e);}};
+})();
+</script>
 </body>
 </html>

@@ -43,11 +43,33 @@ if (!db.lienStatus) db.lienStatus = {};   // { lienId: {status, note, by, at} } 
 if (!db.lienNotes) db.lienNotes = {};     // { lienId: [ {by, role, at, text} ] } — shared communication thread
 function nextId() { db.seq = (db.seq || 1) + 1; return db.seq; }
 
-// Outstanding-lien data (transcribed from the practice ledger; draft figures).
-let LIENS = [];
+// Outstanding-lien data — seeded from liens.json into the datastore so records can be added/edited and persist.
 let FIRM_PAID = {};
-try { LIENS = JSON.parse(fs.readFileSync(path.join(__dirname, 'liens.json'), 'utf8')); } catch (e) { console.log('liens.json not found'); }
 try { FIRM_PAID = JSON.parse(fs.readFileSync(path.join(__dirname, 'firm_paid.json'), 'utf8')); } catch (e) {}
+if (!Array.isArray(db.liens) || !db.liens.length) {
+  try { db.liens = JSON.parse(fs.readFileSync(path.join(__dirname, 'liens.json'), 'utf8')); }
+  catch (e) { db.liens = []; console.log('liens.json not found'); }
+  saveDB();
+}
+let LIENS = db.liens; // working array IS the persisted array
+const NOW = new Date('2026-06-19');
+function recomputeFinance(l) {
+  const det = l.detail || (l.detail = {});
+  ['paid', 'reductionRequested', 'reductionAgreed', 'visits', 'estLow', 'estHigh'].forEach(k => {
+    if (det[k] != null && det[k] !== '') det[k] = Number(String(det[k]).replace(/[$,]/g, '')) || 0;
+  });
+  if (det.dateOfAccident) {
+    const d = new Date(det.dateOfAccident);
+    if (!isNaN(d)) {
+      const sol = new Date(d.getTime() + 730 * 86400000);
+      det.solDate = sol.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      det.solDaysLeft = Math.round((sol - NOW) / 86400000);
+    }
+  }
+  if (det.solDaysLeft == null) det.solDaysLeft = 9999;
+  det.balanceRemaining = (l.balance || 0) - (det.paid || 0);
+  det.netExpected = (l.balance || 0) - (det.reductionAgreed || 0);
+}
 
 // Seed the first admin on first run.
 if (!db.users.length) {
@@ -91,6 +113,12 @@ function requireAuth(req, res, next) {
 function requireAdmin(req, res, next) {
   const u = currentUser(req);
   if (!u || u.role !== 'admin') return res.status(403).json({ error: 'admin_only' });
+  req.user = u; next();
+}
+// Admin or staff (practice side) — used for adding/editing patient records. Firms are read-only.
+function requireStaff(req, res, next) {
+  const u = currentUser(req);
+  if (!u || u.role === 'firm') return res.status(403).json({ error: 'forbidden' });
   req.user = u; next();
 }
 
@@ -272,6 +300,34 @@ app.post('/api/liens/:id/notes', requireAuth, (req, res) => {
   (db.lienNotes[l.id] = db.lienNotes[l.id] || []).push({ by: req.user.name, side: who, role: req.user.role, at: new Date().toISOString().slice(0, 16).replace('T', ' '), text });
   saveDB();
   res.json({ ok: true, notes: db.lienNotes[l.id] });
+});
+
+// Create a new patient/lien record (admin or staff)
+app.post('/api/liens', requireStaff, (req, res) => {
+  const b = req.body || {};
+  if (!b.patient) return res.status(400).json({ error: 'patient name required' });
+  const id = (LIENS.reduce((m, l) => Math.max(m, l.id), 0) || 0) + 1;
+  const lien = {
+    id, patient: b.patient, attorney: b.attorney || '', firm: b.firm || 'NEEDS RESEARCH / CONFIRM',
+    balance: Number(String(b.balance || 0).replace(/[$,]/g, '')) || 0,
+    finalDate: b.finalDate || '', recordsSent: b.recordsSent || '',
+    confidence: 'Added', page: 'Added', detail: Object.assign({}, b.detail || {})
+  };
+  recomputeFinance(lien);
+  LIENS.push(lien); saveDB();
+  res.json({ lien: withStatus(lien) });
+});
+// Edit an existing record (admin or staff)
+app.patch('/api/liens/:id(\\d+)', requireStaff, (req, res) => {
+  const l = LIENS.find(x => x.id == req.params.id);
+  if (!l) return res.status(404).json({ error: 'not found' });
+  const b = req.body || {};
+  ['patient', 'attorney', 'firm', 'finalDate', 'recordsSent'].forEach(k => { if (b[k] != null) l[k] = b[k]; });
+  if (b.balance != null) l.balance = Number(String(b.balance).replace(/[$,]/g, '')) || 0;
+  if (b.detail) l.detail = Object.assign({}, l.detail, b.detail);
+  recomputeFinance(l);
+  saveDB();
+  res.json({ lien: withStatus(l) });
 });
 app.get('/api/liens/summary', requireAuth, (req, res) => {
   const ls = visibleLiens(req.user);
