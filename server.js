@@ -252,8 +252,9 @@ app.post('/api/liens/:id/status', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Full patient/lien record (detail + status + shared notes)
-app.get('/api/liens/:id', requireAuth, (req, res) => {
+// Full patient/lien record (detail + status + shared notes). Numeric :id only so it
+// does not shadow /api/liens/summary.
+app.get('/api/liens/:id(\\d+)', requireAuth, (req, res) => {
   const l = LIENS.find(x => x.id == req.params.id);
   if (!l) return res.status(404).json({ error: 'not found' });
   if (req.user.role === 'firm' && l.firm !== req.user.firm) return res.status(403).json({ error: 'forbidden' });
