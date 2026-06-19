@@ -1339,5 +1339,55 @@ tbody tr.clk{cursor:pointer} tbody tr.clk:hover{background:#f6f8fd}
   };
 })();
 </script>
+<script>
+/* v7: clickable firm names in tables + email-firm button */
+(function(){
+  const $=id=>document.getElementById(id);
+  const yearOf=s=>{const m=(s||'').match(/(\d{2,4})\s*$/);if(!m)return 0;let y=m[1];if(y.length===2)y='20'+y;return +y;};
+  const solRisk=l=>{const d=l.detail||{};return (d.solDaysLeft<=0&&(d.courtStatus||'').indexOf('Not filed')===0)||(d.solDaysLeft>0&&d.solDaysLeft<180);};
+  const flink=firm=>`<span onclick="event.stopPropagation();openFirm('${(firm||'').replace(/'/g,"\\'")}')" style="cursor:pointer;color:var(--gold);text-decoration:underline;text-underline-offset:2px">${firm}</span>`;
+  const stat=l=>l.status?'<span class="roletag admin" style="background:var(--amber-soft);color:var(--amber)">'+l.status+'</span>':'<span class="note">—</span>';
+
+  /* lien table: firm column is now a link */
+  window.renderBoardRows=function(list){const tb=document.querySelector('#lt tbody');if(!tb)return;
+    tb.innerHTML=list.map(l=>`<tr class="clk" onclick="openRecord(${l.id})"><td><b>${l.patient}</b><br><span class="note">${l.attorney}</span></td><td>${flink(l.firm)}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${stat(l)}</td><td>${solRisk(l)?'⚠':''} ⚖</td></tr>`).join('');};
+
+  /* re-render chase list with firm links after base loadBoard */
+  const _lb=window.loadBoard;
+  window.loadBoard=async function(){await _lb();
+    const chase=(window._liens||[]).filter(l=>(l.status&&l.status.indexOf('Settled')===0)||(yearOf(l.recordsSent)&&yearOf(l.recordsSent)<=2024)||solRisk(l));
+    chase.sort((a,b)=>{const x=(a.status||'').indexOf('Settled')===0?0:1,y=(b.status||'').indexOf('Settled')===0?0:1;return x-y||yearOf(a.recordsSent)-yearOf(b.recordsSent);});
+    const cb=document.querySelector('#chase tbody');
+    if(cb)cb.innerHTML=chase.map(l=>`<tr class="clk" onclick="openRecord(${l.id})"><td><b>${l.patient}</b></td><td>${flink(l.firm)}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${l.status||(solRisk(l)?'<span style="color:var(--red)">SOL risk</span>':'aged')}</td><td>⚖</td></tr>`).join('')||'<tr><td colspan="6" class="note" style="padding:14px">Nothing flagged.</td></tr>';};
+
+  /* firm panel + email-this-firm button */
+  const mini=(l,v)=>`<div style="background:var(--bg);border-radius:10px;padding:12px 14px"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);font-weight:600">${l}</div><div style="font-size:20px;font-weight:600;color:var(--ink);margin-top:4px">${v}</div></div>`;
+  window.openFirm=async function(firm){
+    const liens=(window._liens||[]).filter(l=>l.firm===firm).sort((a,b)=>b.balance-a.balance);
+    const out=liens.reduce((s,l)=>s+l.balance,0);
+    const avg=liens.length?Math.round(out/liens.length):0;
+    const sol=liens.filter(solRisk).length;
+    const email=(liens[0]&&liens[0].detail&&liens[0].detail.attorneyEmail)||'';
+    let paid=0; try{const s=await fetch('/api/liens/summary').then(r=>r.json());paid=(s.paid&&s.paid[firm])||0;}catch(e){}
+    const lines=liens.slice(0,30).map(l=>`• ${l.patient} — ${money(l.balance)} (records sent ${l.recordsSent||'n/a'})`).join('\n');
+    const body=`Hello,\n\nBelow are the open liens our office is currently carrying for your firm (${liens.length} patients, ${money(out)} outstanding):\n\n${lines}${liens.length>30?'\n…and '+(liens.length-30)+' more':''}\n\nPlease let us know the status of any that have settled so we can finalize and request records as needed.\n\nThank you,\nFeel Good Chiropractic`;
+    const mailto=`mailto:${email}?subject=${encodeURIComponent('Outstanding liens with Feel Good Chiropractic — '+firm)}&body=${encodeURIComponent(body)}`;
+    const dr=$('drawer'); if(!dr)return;
+    dr.innerHTML=`<div class="dh"><span class="x" onclick="closeDrawer()">✕</span>
+      <h3>${firm}</h3><div class="meta">Law firm · ${liens.length} open liens with Feel Good</div></div>
+    <div class="db">
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        ${mini('Outstanding',money(out))}${mini('Open liens',liens.length)}${mini('Avg lien',money(avg))}${mini('SOL risk',sol)}</div>
+      <a class="btn gold" style="display:inline-block;margin-bottom:16px" href="${mailto}">✉ Email this firm their outstanding list</a>
+      <div class="panel" style="padding:0"><div style="padding:15px 16px 4px"><h4 style="margin:0">Patients with ${firm}</h4></div>
+        <div style="padding:0 0 6px;max-height:440px;overflow:auto"><table><thead><tr><th>Patient</th><th>Balance</th><th>Records sent</th><th>Firm status</th><th>SOL</th></tr></thead><tbody>
+        ${liens.map(l=>`<tr class="clk" onclick="openRecord(${l.id})"><td><b>${l.patient}</b><br><span class="note">${l.attorney}</span></td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${stat(l)}</td><td>${solRisk(l)?'<span style="color:var(--red);font-weight:700">risk</span>':'<span class="note">ok</span>'}</td></tr>`).join('')}
+        </tbody></table></div></div>
+      <p class="note">Estimated paid to this firm (12 mo): ${money(paid)} · DRAFT.</p>
+    </div>`;
+    dr.classList.add('open'); $('dbg').classList.add('open');
+  };
+})();
+</script>
 </body>
 </html>
