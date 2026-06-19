@@ -1301,5 +1301,43 @@ tbody tr.clk{cursor:pointer} tbody tr.clk:hover{background:#f6f8fd}
     $('notebox').value='';$('notebox').style.height='auto';$('notestatus').textContent='';};
 })();
 </script>
+<script>
+/* v6: click a law firm -> firm detail panel with its patients */
+(function(){
+  const $=id=>document.getElementById(id);
+  const solRisk=l=>{const d=l.detail||{};return (d.solDaysLeft<=0&&(d.courtStatus||'').indexOf('Not filed')===0)||(d.solDaysLeft>0&&d.solDaysLeft<180);};
+  const mini=(l,v)=>`<div style="background:var(--bg);border-radius:10px;padding:12px 14px"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);font-weight:600">${l}</div><div style="font-size:20px;font-weight:600;color:var(--ink);margin-top:4px">${v}</div></div>`;
+
+  const _lb=window.loadBoard;
+  window.loadBoard=async function(){await _lb();
+    const liens=window._liens||[]; const total=liens.reduce((s,l)=>s+l.balance,0)||1;
+    const by={}; liens.forEach(l=>{const x=by[l.firm]=by[l.firm]||{firm:l.firm,c:0,o:0};x.c++;x.o+=l.balance;});
+    const rows=Object.values(by).sort((a,b)=>b.o-a.o);
+    const bf=$('bf'); if(bf)bf.innerHTML='<table><thead><tr><th>Law Firm</th><th>Liens</th><th>Outstanding</th><th>%</th></tr></thead><tbody>'+
+      rows.map(f=>`<tr class="clk" onclick="openFirm(${JSON.stringify(f.firm)})"><td><b>${f.firm}</b></td><td>${f.c}</td><td>${money(f.o)}</td><td>${Math.round(f.o/total*100)}%</td></tr>`).join('')+'</tbody></table>';
+  };
+
+  window.openFirm=async function(firm){
+    const liens=(window._liens||[]).filter(l=>l.firm===firm).sort((a,b)=>b.balance-a.balance);
+    const out=liens.reduce((s,l)=>s+l.balance,0);
+    const avg=liens.length?Math.round(out/liens.length):0;
+    const sol=liens.filter(solRisk).length;
+    let paid=0; try{const s=await fetch('/api/liens/summary').then(r=>r.json());paid=(s.paid&&s.paid[firm])||0;}catch(e){}
+    const dr=$('drawer'); if(!dr)return;
+    dr.innerHTML=`<div class="dh"><span class="x" onclick="closeDrawer()">✕</span>
+      <h3>${firm}</h3><div class="meta">Law firm · ${liens.length} open liens with Feel Good</div></div>
+    <div class="db">
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        ${mini('Outstanding',money(out))}${mini('Open liens',liens.length)}${mini('Avg lien',money(avg))}${mini('SOL risk',sol)}</div>
+      <div class="panel" style="padding:0"><div style="padding:15px 16px 4px"><h4 style="margin:0">Patients with ${firm}</h4></div>
+        <div style="padding:0 0 6px;max-height:460px;overflow:auto"><table><thead><tr><th>Patient</th><th>Balance</th><th>Records sent</th><th>Firm status</th><th>SOL</th></tr></thead><tbody>
+        ${liens.map(l=>`<tr class="clk" onclick="openRecord(${l.id})"><td><b>${l.patient}</b><br><span class="note">${l.attorney}</span></td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${l.status?'<span class="roletag admin" style="background:var(--amber-soft);color:var(--amber)">'+l.status+'</span>':'<span class="note">—</span>'}</td><td>${solRisk(l)?'<span style="color:var(--red);font-weight:700">risk</span>':'<span class="note">ok</span>'}</td></tr>`).join('')}
+        </tbody></table></div></div>
+      <p class="note">Click any patient to open their full record. Estimated paid to this firm (12 mo): ${money(paid)} · DRAFT.</p>
+    </div>`;
+    dr.classList.add('open'); $('dbg').classList.add('open');
+  };
+})();
+</script>
 </body>
 </html>
