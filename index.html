@@ -800,6 +800,7 @@ go('overview');
   }
   window.appLogout=async function(){await api('/api/auth/logout',{method:'POST'});location.reload();};
   function startApp(u){window.USER=u;$('loginScreen').classList.add('hide');mountUserChip(u);applyPermissions();
+    if(window.afterLogin){window.afterLogin(u);return;}
     go(canAccess(window._view)?window._view:'overview');}
   window.doLogin=async function(){$('loginErr').textContent='';
     const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email:$('li_email').value,password:$('li_pass').value})});
@@ -873,6 +874,94 @@ go('overview');
 
   VIEWS.todos=window.todosHTML; VIEWS.users=window.usersHTML;
   TITLES.todos=['To-Do','Tasks for you and your team']; TITLES.users=['Users & Access','Add staff and control what they can see'];
+})();
+</script>
+<script>
+/* ===== OUTSTANDING LIENS COMMAND CENTER + LAW-FIRM PORTAL ===== */
+(function(){
+  const $=id=>document.getElementById(id);
+  const api=async u=>{try{return await fetch(u).then(r=>r.json());}catch(e){return {};}};
+
+  window.canAccess=function(v){const u=window.USER;if(!u)return false;
+    if(u.role==='firm')return v==='firmportal';
+    if(v==='firmportal')return false;
+    if(u.role==='admin')return true;
+    if(v==='users'||v==='settings')return false;
+    if(['overview','todos','board'].includes(v))return true;
+    return (u.sections||[]).includes(v);};
+
+  go=(function(orig){return function(v){orig(v);
+    if(v==='board'&&window.loadBoard)loadBoard();
+    if(v==='firmportal'&&window.loadFirm)loadFirm();};})(go);
+
+  function navItem(view,label){const a=document.createElement('a');a.dataset.view=view;a.innerHTML='<span class="ic">$</span> '+label;return a;}
+  function injectNav(){const nav=$('nav');if(!nav||$('nav-board'))return;
+    const sec=document.createElement('div');sec.className='sec';sec.id='sec-liens';sec.textContent='Liens';
+    const fp=navItem('firmportal','My Outstanding Liens');
+    const bd=navItem('board','Outstanding Liens');bd.id='nav-board';
+    nav.insertBefore(fp,nav.firstChild);nav.insertBefore(bd,nav.firstChild);nav.insertBefore(sec,nav.firstChild);}
+  function hideNav(views){document.querySelectorAll('#nav a[data-view]').forEach(a=>{if(views.includes(a.dataset.view))a.style.display='none';});}
+
+  window.afterLogin=function(u){
+    injectNav();applyPermissions();
+    document.querySelectorAll('#nav .sec').forEach(s=>{if(s.id!=='sec-liens')s.style.display='none';});
+    if(u.role==='firm'){$('sec-liens').textContent='Portal';go('firmportal');}
+    else{hideNav(['overview','schedule','roster','cash','medpay','liens','ar','intake','settings']);go('board');}
+  };
+
+  TITLES.board=['Outstanding Liens','Everything owed to the practice, by law firm'];
+  TITLES.firmportal=['Outstanding Liens','Your firm’s open liens with Feel Good Chiropractic'];
+
+  function yearSent(s){const m=(s||'').match(/(\d{2,4})\s*$/);if(!m)return '?';let y=m[1];if(y.length===2)y='20'+y;return y;}
+
+  VIEWS.board=function(){return `
+    <div class="grid kpis mb16" id="bk"></div>
+    <div class="grid two mb16">
+      <div class="card"><div class="hd"><h3>Outstanding by law firm</h3></div><div class="bd" id="bf">Loading…</div></div>
+      <div class="card"><div class="hd"><h3>By year records sent</h3></div><div class="bd" id="by">Loading…</div></div>
+    </div>
+    <div class="card"><div class="hd"><h3>All outstanding liens</h3>
+      <div class="search" style="margin:0;min-width:240px">🔎<input id="lq" placeholder="Search patient or firm…" oninput="filterLiens()"></div></div>
+      <div class="bd" style="padding:0;max-height:520px;overflow:auto"><table id="lt"><thead><tr><th>Patient</th><th>Law Firm</th><th>Attorney</th><th>Balance</th><th>Final</th><th>Records Sent</th></tr></thead><tbody></tbody></table></div></div>`;};
+  window.loadBoard=async function(){
+    const s=await api('/api/liens/summary');const d=await api('/api/liens');
+    window._liens=d.liens||[];
+    const big=(s.byFirm&&s.byFirm[0])||{firm:'—',outstanding:0};
+    if($('bk'))$('bk').innerHTML=
+      kpi('Total Outstanding',money(s.total||0),(s.count||0)+' open liens · DRAFT from ledger','gold')+
+      kpi('Open Liens',(s.count||0),'across '+(s.firms||0)+' law firms','blue')+
+      kpi('Largest Exposure',money(big.outstanding),big.firm,'gold')+
+      kpi('Law Firms',(s.firms||0),'with money outstanding','green');
+    if($('bf'))$('bf').innerHTML='<table><thead><tr><th>Law Firm</th><th>Liens</th><th>Outstanding</th><th>% of total</th></tr></thead><tbody>'+
+      (s.byFirm||[]).map(f=>`<tr><td><b>${f.firm}</b></td><td>${f.count}</td><td>${money(f.outstanding)}</td><td>${Math.round(f.outstanding/(s.total||1)*100)}%</td></tr>`).join('')+'</tbody></table>';
+    const yrs={};(d.liens||[]).forEach(l=>{const y=yearSent(l.recordsSent);(yrs[y]=yrs[y]||{c:0,v:0}).c++;yrs[y].v+=l.balance;});
+    if($('by'))$('by').innerHTML='<table><thead><tr><th>Records sent</th><th>Liens</th><th>Outstanding</th></tr></thead><tbody>'+
+      Object.keys(yrs).sort().map(y=>`<tr><td>${y}</td><td>${yrs[y].c}</td><td>${money(yrs[y].v)}</td></tr>`).join('')+'</tbody></table>';
+    renderLienRows(window._liens);
+  };
+  function renderLienRows(list){const tb=document.querySelector('#lt tbody');if(!tb)return;
+    tb.innerHTML=list.map(l=>`<tr><td><b>${l.patient}</b></td><td>${l.firm}</td><td>${l.attorney}</td><td>${money(l.balance)}</td><td>${l.finalDate||'—'}</td><td>${l.recordsSent||'—'}</td></tr>`).join('');}
+  window.filterLiens=function(){const q=($('lq').value||'').toLowerCase();
+    renderLienRows((window._liens||[]).filter(l=>(l.patient+' '+l.firm+' '+l.attorney).toLowerCase().includes(q)));};
+
+  VIEWS.firmportal=function(){return `
+    <div class="connbar" style="background:var(--gold-soft);border-color:#e0defa;color:var(--gold)"><span>Law-firm portal</span><span class="who" id="fpname"></span></div>
+    <div class="grid kpis mb16" id="fk"></div>
+    <div class="card"><div class="hd"><h3>Your open liens with Feel Good Chiropractic</h3></div>
+      <div class="bd" style="padding:0;max-height:560px;overflow:auto"><table id="ft"><thead><tr><th>Patient</th><th>Attorney</th><th>Balance owed</th><th>Final date</th><th>Records sent</th></tr></thead><tbody></tbody></table></div></div>`;};
+  window.loadFirm=async function(){
+    const s=await api('/api/liens/summary');const d=await api('/api/liens');
+    const firm=(window.USER&&window.USER.firm)||'';
+    if($('fpname'))$('fpname').textContent='· '+firm;
+    const paid=(s.paid&&s.paid[firm])||0;const avg=s.count?Math.round(s.total/s.count):0;
+    if($('fk'))$('fk').innerHTML=
+      kpi('Outstanding to Provider',money(s.total||0),(s.count||0)+' open liens','gold')+
+      kpi('Open Liens',(s.count||0),'awaiting settlement','blue')+
+      kpi('Avg Lien',money(avg),'per patient','green')+
+      kpi('Paid to Provider (12 mo)',money(paid),'estimated · DRAFT','gold');
+    const tb=document.querySelector('#ft tbody');
+    if(tb)tb.innerHTML=(d.liens||[]).map(l=>`<tr><td><b>${l.patient}</b></td><td>${l.attorney}</td><td>${money(l.balance)}</td><td>${l.finalDate||'—'}</td><td>${l.recordsSent||'—'}</td></tr>`).join('');
+  };
 })();
 </script>
 </body>

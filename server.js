@@ -41,6 +41,12 @@ function saveDB() {
 let db = loadDB();
 function nextId() { db.seq = (db.seq || 1) + 1; return db.seq; }
 
+// Outstanding-lien data (transcribed from the practice ledger; draft figures).
+let LIENS = [];
+let FIRM_PAID = {};
+try { LIENS = JSON.parse(fs.readFileSync(path.join(__dirname, 'liens.json'), 'utf8')); } catch (e) { console.log('liens.json not found'); }
+try { FIRM_PAID = JSON.parse(fs.readFileSync(path.join(__dirname, 'firm_paid.json'), 'utf8')); } catch (e) {}
+
 // Seed the first admin on first run.
 if (!db.users.length) {
   const email = (process.env.ADMIN_EMAIL || 'admin@feelgoodchiro.com').toLowerCase();
@@ -49,7 +55,10 @@ if (!db.users.length) {
     id: 1, name: 'Administrator', email, role: 'admin',
     passHash: bcrypt.hashSync(pass, 10), active: true, sections: ALL_SECTIONS.slice()
   });
-  db.seq = 1;
+  // Demo law-firm portal logins (each sees only their own outstanding liens).
+  db.users.push({ id: 2, name: 'Paboojian & Bell — portal', email: 'paboojian@firm.test', role: 'firm', firm: 'Paboojian & Bell, Inc.', passHash: bcrypt.hashSync('firm123', 10), active: true, sections: [] });
+  db.users.push({ id: 3, name: 'Davis & VanWagenen — portal', email: 'vanwagenen@firm.test', role: 'firm', firm: 'Davis & VanWagenen', passHash: bcrypt.hashSync('firm123', 10), active: true, sections: [] });
+  db.seq = 3;
   saveDB();
   console.log(`\n  Seeded first admin -> email: ${email}  password: ${pass}`);
   console.log('  Log in, then change this password under Users & Access.\n');
@@ -69,7 +78,7 @@ app.use(express.static(__dirname));
 // ---------- Auth helpers ----------
 function currentUser(req) { return db.users.find(u => u.id === req.session.uid && u.active); }
 function pub(u) {
-  return { id: u.id, name: u.name, email: u.email, role: u.role,
+  return { id: u.id, name: u.name, email: u.email, role: u.role, firm: u.firm || null,
            active: u.active, sections: u.role === 'admin' ? ALL_SECTIONS.slice() : (u.sections || []) };
 }
 function requireAuth(req, res, next) {
@@ -103,14 +112,15 @@ app.get('/api/users', requireAdmin, (req, res) => {
   res.json({ users: db.users.map(pub) });
 });
 app.post('/api/users', requireAdmin, (req, res) => {
-  const { name, email, password, role, sections } = req.body || {};
+  const { name, email, password, role, sections, firm } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email & password required' });
   if (db.users.find(x => x.email === email.toLowerCase())) return res.status(400).json({ error: 'email already exists' });
+  const rl = ['admin', 'firm'].includes(role) ? role : 'staff';
   const u = {
     id: nextId(), name: name || email, email: email.toLowerCase(),
-    role: role === 'admin' ? 'admin' : 'staff',
+    role: rl, firm: rl === 'firm' ? (firm || '') : '',
     passHash: bcrypt.hashSync(password, 10), active: true,
-    sections: Array.isArray(sections) ? sections : DEFAULT_STAFF_SECTIONS.slice()
+    sections: rl === 'staff' ? (Array.isArray(sections) ? sections : DEFAULT_STAFF_SECTIONS.slice()) : []
   };
   db.users.push(u); saveDB();
   res.json({ user: pub(u) });
@@ -118,9 +128,10 @@ app.post('/api/users', requireAdmin, (req, res) => {
 app.patch('/api/users/:id', requireAdmin, (req, res) => {
   const u = db.users.find(x => x.id == req.params.id);
   if (!u) return res.status(404).json({ error: 'not found' });
-  const { name, role, active, sections, password } = req.body || {};
+  const { name, role, active, sections, password, firm } = req.body || {};
   if (name != null) u.name = name;
-  if (role != null) u.role = role === 'admin' ? 'admin' : 'staff';
+  if (role != null) u.role = ['admin', 'firm'].includes(role) ? role : 'staff';
+  if (firm != null) u.firm = firm;
   if (active != null) u.active = !!active;
   if (Array.isArray(sections)) u.sections = sections;
   if (password) u.passHash = bcrypt.hashSync(password, 10);
@@ -221,6 +232,24 @@ app.get('/api/calendar', (req, res) => {
       }))
     });
   }).catch(e => res.status(500).json({ error: e.message }));
+});
+
+// ---------- Outstanding liens ----------
+function visibleLiens(u) { return u.role === 'firm' ? LIENS.filter(l => l.firm === u.firm) : LIENS; }
+app.get('/api/liens', requireAuth, (req, res) => {
+  res.json({ liens: visibleLiens(req.user), role: req.user.role, firm: req.user.firm || null });
+});
+app.get('/api/liens/summary', requireAuth, (req, res) => {
+  const ls = visibleLiens(req.user);
+  const byFirm = {};
+  ls.forEach(l => { const f = byFirm[l.firm] = byFirm[l.firm] || { firm: l.firm, count: 0, outstanding: 0 }; f.count++; f.outstanding += l.balance; });
+  res.json({
+    total: ls.reduce((s, l) => s + l.balance, 0),
+    count: ls.length,
+    firms: Object.keys(byFirm).length,
+    byFirm: Object.values(byFirm).sort((a, b) => b.outstanding - a.outstanding),
+    paid: req.user.role === 'firm' ? { [req.user.firm]: FIRM_PAID[req.user.firm] } : FIRM_PAID
+  });
 });
 
 app.listen(PORT, () => {
