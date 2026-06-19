@@ -1228,5 +1228,78 @@ tbody tr.clk{cursor:pointer} tbody tr.clk:hover{background:#f6f8fd}
   };
 })();
 </script>
+<style>
+/* v5: nicer notes thread */
+.thread{display:flex;flex-direction:column;gap:14px;margin:10px 0 14px;max-height:340px;overflow:auto;padding:4px 2px}
+.msg{display:flex;gap:10px;align-items:flex-end;max-width:92%}
+.msg.firm{align-self:flex-end;flex-direction:row-reverse}
+.msg.prac{align-self:flex-start}
+.msg .av{width:30px;height:30px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10.5px}
+.msg.prac .av{background:var(--gold-soft);color:var(--gold)}
+.msg.firm .av{background:var(--blue-soft);color:var(--blue)}
+.msg .bubble{padding:9px 13px;border-radius:14px;font-size:13px;line-height:1.5;box-shadow:0 1px 1px rgba(16,24,40,.05)}
+.msg.prac .bubble{background:#fff;border:1px solid var(--line);border-bottom-left-radius:5px}
+.msg.firm .bubble{background:var(--blue-soft);border:1px solid #cfe3f8;border-bottom-right-radius:5px}
+.msg .meta{display:flex;gap:6px;align-items:baseline;margin-bottom:4px}
+.msg .nm{font-size:11px;font-weight:700;color:var(--ink)} .msg .sd{font-size:10px;color:var(--slate)}
+.msg .tm{font-size:10px;color:var(--slate);margin-top:5px}
+.msg.firm .tm{text-align:right}
+.thread-empty{text-align:center;color:var(--slate);font-size:12.5px;padding:26px 12px;line-height:1.6}
+.compose{display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:12px;padding:7px 7px 7px 12px;background:#fff}
+.compose textarea{flex:1;border:none;outline:none;resize:none;font-family:inherit;font-size:13px;background:transparent;max-height:90px}
+.compose .send{flex:none;background:var(--gold);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:600;font-size:13px;cursor:pointer}
+.compose .send:hover{filter:brightness(1.05)}
+</style>
+<script>
+/* v5: restyled patient record notes */
+(function(){
+  const $=id=>document.getElementById(id);
+  const api=async (u,o)=>{try{return await fetch(u,o).then(r=>r.json());}catch(e){return {};}};
+  const kv=(k,v)=>`<div class="kv"><span class="k">${k}</span><span class="v">${(v||v===0)?v:'—'}</span></div>`;
+  const m=v=>v?money(v):'—';
+  const esc=s=>(s||'').replace(/</g,'&lt;');
+  const initials=s=>(s||'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'•';
+  function solChip(d){const n=d.solDaysLeft;const nf=(d.courtStatus||'').indexOf('Not filed')===0;
+    if(n<=0&&nf)return '<span class="rec-sol" style="background:var(--red-soft);color:var(--red)">⚠ Statute of limitations PASSED — not filed</span>';
+    if(n<=0)return '<span class="rec-sol" style="background:#eef0f3;color:var(--slate)">SOL date passed · '+d.solDate+'</span>';
+    if(n<180)return '<span class="rec-sol" style="background:var(--amber-soft);color:var(--amber)">⏳ SOL in '+n+' days · '+d.solDate+'</span>';
+    return '<span class="rec-sol" style="background:var(--green-soft);color:var(--green)">SOL OK · '+d.solDate+'</span>';}
+  function statusChip(s){if(!s)return '';const c=s.indexOf('Settled')===0?['var(--amber-soft)','var(--amber)']:s==='Paid'?['var(--green-soft)','var(--green)']:['var(--blue-soft)','var(--blue)'];
+    return `<span class="rec-sol" style="background:${c[0]};color:${c[1]}">Firm: ${s}</span>`;}
+  function threadHTML(notes){
+    if(!notes||!notes.length)return '<div class="thread-empty">💬 No messages yet.<br>Start the conversation — both Feel Good and the firm will see it.</div>';
+    return notes.map(n=>`<div class="msg ${n.role==='firm'?'firm':'prac'}"><div class="av">${initials(n.side)}</div>
+      <div><div class="bubble"><div class="meta"><span class="nm">${n.by}</span><span class="sd">· ${n.side}</span></div>${esc(n.text)}<div class="tm">${n.at}</div></div></div></div>`).join('');
+  }
+  window.openRecord=async function(id){
+    const r=await api('/api/liens/'+id); if(!r.lien)return; const p=r.lien,d=p.detail||{};
+    const dr=$('drawer'); if(!dr)return;
+    dr.innerHTML=`<div class="dh"><span class="x" onclick="closeDrawer()">✕</span>
+      <h3>${p.patient}</h3><div class="meta">${p.firm} · ${p.attorney} · balance ${money(p.balance)}</div>
+      <div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">${solChip(d)}${statusChip(p.status)}</div></div>
+    <div class="db">
+      <div class="panel"><h4>Accident &amp; injury</h4>
+        ${kv('Date of accident',d.dateOfAccident)}${kv('Accident type',d.accidentType)}${kv('Injuries / complaint',d.injuries)}${kv('Date of birth',d.dob)}${kv('Patient phone',d.phone)}</div>
+      <div class="panel"><h4>Treatment</h4>
+        ${kv('Treatment start',d.treatmentStart)}${kv('Last visit',d.lastVisit)}${kv('Visits',d.visits)}${kv('Frequency',d.frequency)}${kv('Modalities',d.modalities)}${kv('Referred out',d.referrals)}${kv('Final / P&S report',d.narrativeStatus)}</div>
+      <div class="panel"><h4>Legal &amp; insurance</h4>
+        ${kv('Attorney',p.attorney)}${kv('Case manager',d.caseManager)}${kv('Attorney phone',d.attorneyPhone)}${kv('Attorney email',d.attorneyEmail)}${kv('Court case #',d.caseNumber)}${kv('Court status',d.courtStatus)}${kv('LOP on file',d.lopOnFile)}${kv('At-fault insurer',d.insuranceCarrier)}${kv('Claim #',d.claimNumber)}${kv('Adjuster',d.adjuster)}
+        <a class="btn sm mt8" href="https://trellis.law/cases/${encodeURIComponent(p.patient.replace(/\(.*?\)/g,'').trim())}?county=Fresno" target="_blank">⚖ Check court records on Trellis</a></div>
+      <div class="panel"><h4>Financial</h4>
+        ${kv('Lien billed / owed',money(p.balance))}${kv('Reduction requested',m(d.reductionRequested))}${kv('Reduction agreed',m(d.reductionAgreed))}${kv('Paid to date',m(d.paid))}${kv('Balance remaining',money(d.balanceRemaining!=null?d.balanceRemaining:p.balance))}${kv('Net expected at settlement',money(d.netExpected!=null?d.netExpected:p.balance))}${kv('Est. case value',money(d.estLow)+' – '+money(d.estHigh))}${kv('Records sent',p.recordsSent)}${kv('Stage',d.stage)}</div>
+      <div class="panel"><h4>Shared notes — Feel Good ⇄ ${p.firm}</h4>
+        <div class="thread" id="thread">${threadHTML(r.notes)}</div>
+        <div class="compose"><textarea id="notebox" rows="1" placeholder="Write a note both sides can see…" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea><button class="send" onclick="addNote(${p.id})">Send</button></div>
+        <div id="notestatus" class="note" style="margin-top:6px"></div></div>
+    </div>`;
+    dr.classList.add('open'); $('dbg').classList.add('open');
+    setTimeout(()=>{const t=$('thread');if(t)t.scrollTop=t.scrollHeight;},30);
+  };
+  window.addNote=async function(id){const t=($('notebox').value||'').trim();if(!t){$('notestatus').textContent='Type a note first.';return;}
+    const r=await api('/api/liens/'+id+'/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});
+    const th=$('thread'); if(th){th.innerHTML=threadHTML(r.notes||[]);th.scrollTop=th.scrollHeight;}
+    $('notebox').value='';$('notebox').style.height='auto';$('notestatus').textContent='';};
+})();
+</script>
 </body>
 </html>
