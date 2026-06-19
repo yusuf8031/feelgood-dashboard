@@ -964,5 +964,82 @@ go('overview');
   };
 })();
 </script>
+<script>
+/* ===== v2: chase list + firm status confirmation + Trellis court-check ===== */
+(function(){
+  const $=id=>document.getElementById(id);
+  const api=async (u,o)=>{try{return await fetch(u,o).then(r=>r.json());}catch(e){return {};}};
+  window.trellisLink=function(name){const n=(name||'').replace(/\(.*?\)/g,'').replace(/[^a-zA-Z .'-]/g,'').trim();
+    return 'https://trellis.law/cases/'+encodeURIComponent(n)+'?county=Fresno';};
+  const STATUSES=['','Open / pending','In litigation','Settled — payment coming','Reduction requested','Paid'];
+  function statusBadge(s){if(!s)return '<span class="note">—</span>';
+    const c=s.indexOf('Settled')===0?'amber':s==='Paid'?'green':s==='In litigation'?'blue':'';
+    return `<span class="roletag ${c==='green'?'staff':'admin'}" style="background:${c==='amber'?'var(--amber-soft)':c==='green'?'var(--green-soft)':c==='blue'?'var(--blue-soft)':'#eef0f3'};color:${c==='amber'?'var(--amber)':c==='green'?'var(--green)':c==='blue'?'var(--blue)':'var(--slate)'}">${s}</span>`;}
+  window.setLienStatus=async function(id,val){await api('/api/liens/'+id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:val})});
+    if(window._view==='firmportal')loadFirm(); else loadBoard();};
+  function yearOf(s){const m=(s||'').match(/(\d{2,4})\s*$/);if(!m)return 0;let y=m[1];if(y.length===2)y='20'+y;return +y;}
+
+  /* ---- enhanced admin board ---- */
+  VIEWS.board=function(){return `
+    <div class="grid kpis mb16" id="bk"></div>
+    <div class="card mb16"><div class="hd"><h3>⚑ Needs follow-up — chase these</h3><span class="note" id="chasecount"></span></div>
+      <div class="bd" style="padding:0;max-height:260px;overflow:auto"><table id="chase"><thead><tr><th>Patient</th><th>Law Firm</th><th>Balance</th><th>Records Sent</th><th>Firm status</th><th>Court</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="grid two mb16">
+      <div class="card"><div class="hd"><h3>Outstanding by law firm</h3></div><div class="bd" id="bf">Loading…</div></div>
+      <div class="card"><div class="hd"><h3>By year records sent</h3></div><div class="bd" id="by">Loading…</div></div>
+    </div>
+    <div class="card"><div class="hd"><h3>All outstanding liens</h3>
+      <div class="search" style="margin:0;min-width:240px">🔎<input id="lq" placeholder="Search patient or firm…" oninput="filterLiens()"></div></div>
+      <div class="bd" style="padding:0;max-height:460px;overflow:auto"><table id="lt"><thead><tr><th>Patient</th><th>Law Firm</th><th>Balance</th><th>Records Sent</th><th>Firm status</th><th>Court</th></tr></thead><tbody></tbody></table></div></div>`;};
+  window.loadBoard=async function(){
+    const s=await api('/api/liens/summary');const d=await api('/api/liens');
+    window._liens=d.liens||[];
+    const big=(s.byFirm&&s.byFirm[0])||{firm:'—',outstanding:0};
+    const chase=(window._liens).filter(l=>(l.status&&l.status.indexOf('Settled')===0)||(yearOf(l.recordsSent)&&yearOf(l.recordsSent)<=2024));
+    if($('bk'))$('bk').innerHTML=
+      kpi('Total Outstanding',money(s.total||0),(s.count||0)+' open liens · DRAFT','gold')+
+      kpi('Needs Follow-up',chase.length,'aged or firm-reported settled','red')+
+      kpi('Largest Exposure',money(big.outstanding),big.firm,'gold')+
+      kpi('Law Firms',(s.firms||0),'with money outstanding','blue');
+    if($('chasecount'))$('chasecount').textContent=chase.length+' to chase';
+    chase.sort((a,b)=>{const x=(a.status||'').indexOf('Settled')===0?0:1,y=(b.status||'').indexOf('Settled')===0?0:1;return x-y||yearOf(a.recordsSent)-yearOf(b.recordsSent);});
+    const crow=l=>`<tr><td><b>${l.patient}</b></td><td>${l.firm}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${statusBadge(l.status)}</td><td><a href="${trellisLink(l.patient)}" target="_blank" title="Check Fresno court records on Trellis">⚖ Check</a></td></tr>`;
+    const cb=document.querySelector('#chase tbody');if(cb)cb.innerHTML=chase.map(crow).join('')||'<tr><td colspan="6" class="note" style="padding:14px">Nothing flagged — nice.</td></tr>';
+    if($('bf'))$('bf').innerHTML='<table><thead><tr><th>Law Firm</th><th>Liens</th><th>Outstanding</th><th>%</th></tr></thead><tbody>'+
+      (s.byFirm||[]).map(f=>`<tr><td><b>${f.firm}</b></td><td>${f.count}</td><td>${money(f.outstanding)}</td><td>${Math.round(f.outstanding/(s.total||1)*100)}%</td></tr>`).join('')+'</tbody></table>';
+    const yrs={};(window._liens).forEach(l=>{const y=yearOf(l.recordsSent)||'?';(yrs[y]=yrs[y]||{c:0,v:0}).c++;yrs[y].v+=l.balance;});
+    if($('by'))$('by').innerHTML='<table><thead><tr><th>Records sent</th><th>Liens</th><th>Outstanding</th></tr></thead><tbody>'+
+      Object.keys(yrs).sort().map(y=>`<tr><td>${y}</td><td>${yrs[y].c}</td><td>${money(yrs[y].v)}</td></tr>`).join('')+'</tbody></table>';
+    renderBoardRows(window._liens);
+  };
+  function renderBoardRows(list){const tb=document.querySelector('#lt tbody');if(!tb)return;
+    tb.innerHTML=list.map(l=>`<tr><td><b>${l.patient}</b><br><span class="note">${l.attorney}</span></td><td>${l.firm}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td><td>${statusBadge(l.status)}</td><td><a href="${trellisLink(l.patient)}" target="_blank">⚖ Check</a></td></tr>`).join('');}
+  window.filterLiens=function(){const q=($('lq').value||'').toLowerCase();
+    renderBoardRows((window._liens||[]).filter(l=>(l.patient+' '+l.firm+' '+l.attorney).toLowerCase().includes(q)));};
+
+  /* ---- enhanced firm portal (status confirmation) ---- */
+  window.loadFirm=async function(){
+    const s=await api('/api/liens/summary');const d=await api('/api/liens');
+    const firm=(window.USER&&window.USER.firm)||'';
+    if($('fpname'))$('fpname').textContent='· '+firm;
+    const paid=(s.paid&&s.paid[firm])||0;const avg=s.count?Math.round(s.total/s.count):0;
+    if($('fk'))$('fk').innerHTML=
+      kpi('Outstanding to Provider',money(s.total||0),(s.count||0)+' open liens','gold')+
+      kpi('Open Liens',(s.count||0),'awaiting settlement','blue')+
+      kpi('Avg Lien',money(avg),'per patient','green')+
+      kpi('Paid to Provider (12 mo)',money(paid),'estimated · DRAFT','gold');
+    const opt=cur=>STATUSES.map(o=>`<option ${o===cur?'selected':''}>${o||'— set status —'}</option>`).join('');
+    const tb=document.querySelector('#ft tbody');
+    if(tb)tb.innerHTML=(d.liens||[]).map(l=>`<tr><td><b>${l.patient}</b></td><td>${l.attorney}</td><td>${money(l.balance)}</td><td>${l.recordsSent||'—'}</td>
+      <td><select onchange="setLienStatus(${l.id},this.value)" style="border:1px solid var(--line);border-radius:7px;padding:6px;font-size:12px">${opt(l.status)}</select></td></tr>`).join('');
+  };
+  VIEWS.firmportal=function(){return `
+    <div class="connbar" style="background:var(--gold-soft);border-color:#e0defa;color:var(--gold)"><span>Law-firm portal</span><span class="who" id="fpname"></span></div>
+    <p style="color:var(--slate);font-size:13px;margin-bottom:14px">Update the status of any lien below — it instantly tells Feel Good which cases have settled, so they can finalize payment. No more phone tag.</p>
+    <div class="grid kpis mb16" id="fk"></div>
+    <div class="card"><div class="hd"><h3>Your open liens with Feel Good Chiropractic</h3></div>
+      <div class="bd" style="padding:0;max-height:560px;overflow:auto"><table id="ft"><thead><tr><th>Patient</th><th>Attorney</th><th>Balance owed</th><th>Records sent</th><th>Set status</th></tr></thead><tbody></tbody></table></div></div>`;};
+})();
+</script>
 </body>
 </html>

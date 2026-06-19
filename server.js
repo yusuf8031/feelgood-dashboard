@@ -39,6 +39,7 @@ function saveDB() {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 }
 let db = loadDB();
+if (!db.lienStatus) db.lienStatus = {};   // { lienId: {status, note, by, at} } — firm-reported case status
 function nextId() { db.seq = (db.seq || 1) + 1; return db.seq; }
 
 // Outstanding-lien data (transcribed from the practice ledger; draft figures).
@@ -236,8 +237,18 @@ app.get('/api/calendar', (req, res) => {
 
 // ---------- Outstanding liens ----------
 function visibleLiens(u) { return u.role === 'firm' ? LIENS.filter(l => l.firm === u.firm) : LIENS; }
+function withStatus(l) { const s = db.lienStatus[l.id] || {}; return Object.assign({}, l, { status: s.status || '', statusNote: s.note || '', statusAt: s.at || '' }); }
 app.get('/api/liens', requireAuth, (req, res) => {
-  res.json({ liens: visibleLiens(req.user), role: req.user.role, firm: req.user.firm || null });
+  res.json({ liens: visibleLiens(req.user).map(withStatus), role: req.user.role, firm: req.user.firm || null });
+});
+app.post('/api/liens/:id/status', requireAuth, (req, res) => {
+  const l = LIENS.find(x => x.id == req.params.id);
+  if (!l) return res.status(404).json({ error: 'not found' });
+  if (req.user.role === 'firm' && l.firm !== req.user.firm) return res.status(403).json({ error: 'forbidden' });
+  const { status, note } = req.body || {};
+  db.lienStatus[l.id] = { status: status || '', note: note || '', by: req.user.name, at: new Date().toISOString().slice(0, 10) };
+  saveDB();
+  res.json({ ok: true });
 });
 app.get('/api/liens/summary', requireAuth, (req, res) => {
   const ls = visibleLiens(req.user);
