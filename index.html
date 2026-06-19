@@ -1041,5 +1041,30 @@ go('overview');
       <div class="bd" style="padding:0;max-height:560px;overflow:auto"><table id="ft"><thead><tr><th>Patient</th><th>Attorney</th><th>Balance owed</th><th>Records sent</th><th>Set status</th></tr></thead><tbody></tbody></table></div></div>`;};
 })();
 </script>
+<script>
+/* ===== demo quick sign-in buttons ===== */
+(function(){
+  function qbtn(label,sub,email,pass,gold){
+    return `<button type="button" onclick="quickLogin('${email}','${pass}')" style="width:100%;text-align:left;padding:10px 12px;border:1px solid ${gold?'transparent':'var(--line)'};border-radius:8px;background:${gold?'var(--gold)':'#fff'};color:${gold?'#fff':'var(--ink)'};font-weight:600;font-size:13px;cursor:pointer;line-height:1.2">${label}<br><span style="font-weight:400;font-size:11px;opacity:.8">${sub}</span></button>`;
+  }
+  window.quickLogin=function(email,pass){
+    const e=document.getElementById('li_email'),p=document.getElementById('li_pass');
+    if(e)e.value=email; if(p)p.value=pass;
+    if(window.doLogin)window.doLogin();
+  };
+  document.addEventListener('DOMContentLoaded',function(){
+    const form=document.getElementById('loginForm'); if(!form||document.getElementById('qsi'))return;
+    const wrap=document.createElement('div'); wrap.id='qsi';
+    wrap.style.cssText='margin-top:16px;border-top:1px solid var(--line);padding-top:14px';
+    wrap.innerHTML='<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate);font-weight:600;margin-bottom:9px">Demo — one-click sign in</div>'+
+      '<div style="display:flex;flex-direction:column;gap:8px">'+
+      qbtn('Feel Good Chiropractic','Practice admin','admin@feelgoodchiro.com','changeme123',true)+
+      qbtn('Paboojian &amp; Bell, Inc.','Law-firm portal','paboojian@firm.test','firm123',false)+
+      qbtn('Davis &amp; VanWagenen','Law-firm portal','vanwagenen@firm.test','firm123',false)+
+      '</div>';
+    form.appendChild(wrap);
+  });
+})();
+</script>
 </body>
 </html>
