@@ -1163,5 +1163,70 @@ tbody tr.clk{cursor:pointer} tbody tr.clk:hover{background:#f6f8fd}
   };
 })();
 </script>
+<script>
+/* ===== v4: firm filter + financial detail ===== */
+(function(){
+  const $=id=>document.getElementById(id);
+  const api=async (u,o)=>{try{return await fetch(u,o).then(r=>r.json());}catch(e){return {};}};
+  const kv=(k,v)=>`<div class="kv"><span class="k">${k}</span><span class="v">${(v||v===0)?v:'—'}</span></div>`;
+  const m=v=>v?money(v):'—';
+  function solChip(d){const n=d.solDaysLeft;const nf=(d.courtStatus||'').indexOf('Not filed')===0;
+    if(n<=0&&nf)return '<span class="rec-sol" style="background:var(--red-soft);color:var(--red)">⚠ Statute of limitations PASSED — not filed</span>';
+    if(n<=0)return '<span class="rec-sol" style="background:#eef0f3;color:var(--slate)">SOL date passed · '+d.solDate+'</span>';
+    if(n<180)return '<span class="rec-sol" style="background:var(--amber-soft);color:var(--amber)">⏳ SOL in '+n+' days · '+d.solDate+'</span>';
+    return '<span class="rec-sol" style="background:var(--green-soft);color:var(--green)">SOL OK · '+d.solDate+'</span>';}
+  function statusChip(s){if(!s)return '';const c=s.indexOf('Settled')===0?['var(--amber-soft)','var(--amber)']:s==='Paid'?['var(--green-soft)','var(--green)']:['var(--blue-soft)','var(--blue)'];
+    return `<span class="rec-sol" style="background:${c[0]};color:${c[1]}">Firm: ${s}</span>`;}
+
+  /* board with firm filter */
+  VIEWS.board=function(){return `
+    <div class="grid kpis mb16" id="bk"></div>
+    <div class="card mb16"><div class="hd"><h3>⚑ Needs follow-up — chase these</h3><span class="note" id="chasecount"></span></div>
+      <div class="bd" style="padding:0;max-height:240px;overflow:auto"><table id="chase"><thead><tr><th>Patient</th><th>Law Firm</th><th>Balance</th><th>Records Sent</th><th>Flag</th><th>Court</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="grid two mb16">
+      <div class="card"><div class="hd"><h3>Outstanding by law firm</h3></div><div class="bd" id="bf">Loading…</div></div>
+      <div class="card"><div class="hd"><h3>By year records sent</h3></div><div class="bd" id="by">Loading…</div></div>
+    </div>
+    <div class="card"><div class="hd"><h3>All outstanding liens</h3>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="firmFilter" onchange="filterLiens()" style="border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12.5px;font-family:inherit"><option value="">All firms</option></select>
+        <div class="search" style="margin:0;min-width:210px">🔎<input id="lq" placeholder="Search patient…" oninput="filterLiens()"></div></div></div>
+      <div class="bd" style="padding:0;max-height:460px;overflow:auto"><table id="lt"><thead><tr><th>Patient</th><th>Law Firm</th><th>Balance</th><th>Records Sent</th><th>Firm status</th><th>Flag</th></tr></thead><tbody></tbody></table></div></div>`;};
+
+  const _lb=window.loadBoard;
+  window.loadBoard=async function(){await _lb();
+    const sel=$('firmFilter');if(sel){const cur=sel.value;const firms=[...new Set((window._liens||[]).map(l=>l.firm))].sort();
+      sel.innerHTML='<option value="">All firms ('+(window._liens||[]).length+')</option>'+firms.map(f=>`<option ${f===cur?'selected':''}>${f}</option>`).join('');}};
+  window.filterLiens=function(){const q=($('lq')?$('lq').value:'').toLowerCase();const fv=$('firmFilter')?$('firmFilter').value:'';
+    window.renderBoardRows((window._liens||[]).filter(l=>(!fv||l.firm===fv)&&(l.patient+' '+l.firm+' '+l.attorney).toLowerCase().includes(q)));};
+
+  /* record drawer with financial detail */
+  window.openRecord=async function(id){
+    const r=await api('/api/liens/'+id); if(!r.lien)return; const p=r.lien,d=p.detail||{};
+    const notes=(r.notes||[]).map(n=>`<div class="bub ${n.role==='firm'?'firm':'prac'}"><div class="who">${n.side} · ${n.by}</div>${n.text.replace(/</g,'&lt;')}<div class="tm">${n.at}</div></div>`).join('')||'<div class="note">No notes yet. Start the conversation — both sides will see it.</div>';
+    const dr=$('drawer'); if(!dr)return;
+    dr.innerHTML=`<div class="dh"><span class="x" onclick="closeDrawer()">✕</span>
+      <h3>${p.patient}</h3><div class="meta">${p.firm} · ${p.attorney} · balance ${money(p.balance)}</div>
+      <div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">${solChip(d)}${statusChip(p.status)}</div></div>
+    <div class="db">
+      <div class="panel"><h4>Accident &amp; injury</h4>
+        ${kv('Date of accident',d.dateOfAccident)}${kv('Accident type',d.accidentType)}${kv('Injuries / complaint',d.injuries)}${kv('Date of birth',d.dob)}${kv('Patient phone',d.phone)}</div>
+      <div class="panel"><h4>Treatment</h4>
+        ${kv('Treatment start',d.treatmentStart)}${kv('Last visit',d.lastVisit)}${kv('Visits',d.visits)}${kv('Frequency',d.frequency)}${kv('Modalities',d.modalities)}${kv('Referred out',d.referrals)}${kv('Final / P&S report',d.narrativeStatus)}</div>
+      <div class="panel"><h4>Legal &amp; insurance</h4>
+        ${kv('Attorney',p.attorney)}${kv('Case manager',d.caseManager)}${kv('Attorney phone',d.attorneyPhone)}${kv('Attorney email',d.attorneyEmail)}${kv('Court case #',d.caseNumber)}${kv('Court status',d.courtStatus)}${kv('LOP on file',d.lopOnFile)}${kv('At-fault insurer',d.insuranceCarrier)}${kv('Claim #',d.claimNumber)}${kv('Adjuster',d.adjuster)}
+        <a class="btn sm mt8" href="https://trellis.law/cases/${encodeURIComponent(p.patient.replace(/\(.*?\)/g,'').trim())}?county=Fresno" target="_blank">⚖ Check court records on Trellis</a></div>
+      <div class="panel"><h4>Financial</h4>
+        ${kv('Lien billed / owed',money(p.balance))}${kv('Reduction requested',m(d.reductionRequested))}${kv('Reduction agreed',m(d.reductionAgreed))}${kv('Paid to date',m(d.paid))}${kv('Balance remaining',money(d.balanceRemaining!=null?d.balanceRemaining:p.balance))}${kv('Net expected at settlement',money(d.netExpected!=null?d.netExpected:p.balance))}${kv('Est. case value',money(d.estLow)+' – '+money(d.estHigh))}${kv('Records sent',p.recordsSent)}${kv('Stage',d.stage)}</div>
+      <div class="panel"><h4>Shared notes — Feel Good ⇄ ${p.firm}</h4>
+        <p class="note" style="margin:0 0 8px">Both the practice and the firm see this thread.</p>
+        <div class="thread">${notes}</div>
+        <div class="vin"><textarea id="notebox" rows="2" placeholder="Add a note both sides can see…"></textarea></div>
+        <button class="btn gold sm mt8" onclick="addNote(${p.id})">Post note</button> <span id="notestatus" class="note"></span></div>
+    </div>`;
+    dr.classList.add('open'); $('dbg').classList.add('open');
+  };
+})();
+</script>
 </body>
 </html>
